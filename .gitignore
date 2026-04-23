@@ -1,0 +1,24 @@
+# Maven build output
+target/
+.flattened-pom.xml
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Sensitive config (real credentials — copy from *.template files)
+*-cloud.properties
+!*-cloud.properties.template

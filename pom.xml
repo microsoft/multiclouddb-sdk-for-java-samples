@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.microsoft.multiclouddb</groupId>
+    <artifactId>multiclouddb-samples</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Multicloud DB SDK - Sample Applications</name>
+    <description>
+        Sample applications demonstrating the Multicloud DB SDK's provider-portable API.
+        Runs against Azure Cosmos DB, Amazon DynamoDB, or Google Cloud Spanner by changing
+        a single properties file.
+
+        Prerequisites:
+          1. Clone https://github.com/microsoft/multiclouddb-sdk-for-java
+          2. Run: mvn clean install -DskipTests
+             This installs the SDK artifacts into your local ~/.m2 repository.
+          3. Then build this project: mvn compile
+    </description>
+    <url>https://github.com/allenkim0129/multiclouddb-samples</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <properties>
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!--
+            Multicloud DB SDK versions.
+            These artifacts are resolved from your local ~/.m2 repository.
+            Build the SDK first: mvn clean install -DskipTests
+            (in the multiclouddb-sdk-for-java repo root)
+        -->
+        <multiclouddb-api.version>0.1.0-beta.2</multiclouddb-api.version>
+        <multiclouddb-provider-cosmos.version>0.1.0-beta.2</multiclouddb-provider-cosmos.version>
+        <multiclouddb-provider-dynamo.version>0.1.0-beta.2</multiclouddb-provider-dynamo.version>
+        <multiclouddb-provider-spanner.version>0.1.0-beta.2</multiclouddb-provider-spanner.version>
+
+        <!-- Third-party dependency versions -->
+        <jackson.version>2.18.6</jackson.version>
+        <slf4j.version>2.0.12</slf4j.version>
+        <logback.version>1.5.25</logback.version>
+        <azure-cosmos.version>4.78.0</azure-cosmos.version>
+        <aws-sdk.version>2.34.0</aws-sdk.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- ============================================================
+             Multicloud DB SDK — resolved from local ~/.m2 repository.
+             Run `mvn clean install -DskipTests` in multiclouddb-sdk-for-java
+             to populate these before building this project.
+             ============================================================ -->
+        <dependency>
+            <groupId>com.microsoft.multiclouddb</groupId>
+            <artifactId>multiclouddb-api</artifactId>
+            <version>${multiclouddb-api.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.microsoft.multiclouddb</groupId>
+            <artifactId>multiclouddb-provider-cosmos</artifactId>
+            <version>${multiclouddb-provider-cosmos.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.microsoft.multiclouddb</groupId>
+            <artifactId>multiclouddb-provider-dynamo</artifactId>
+            <version>${multiclouddb-provider-dynamo.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.microsoft.multiclouddb</groupId>
+            <artifactId>multiclouddb-provider-spanner</artifactId>
+            <version>${multiclouddb-provider-spanner.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ============================================================
+             Native cloud SDKs — resolved from Maven Central.
+             ============================================================ -->
+
+        <!-- Azure Cosmos DB (used for resource provisioning in RiskPlatformApp) -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-cosmos</artifactId>
+            <version>${azure-cosmos.version}</version>
+        </dependency>
+
+        <!-- AWS DynamoDB (used for resource provisioning in RiskPlatformApp) -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb</artifactId>
+            <version>${aws-sdk.version}</version>
+        </dependency>
+
+        <!-- ============================================================
+             Utilities
+             ============================================================ -->
+
+        <!-- JSON serialization -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+        </dependency>
+
+        <!-- Bridge commons-logging (used by AWS/Cosmos SDKs) to SLF4J -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>jcl-over-slf4j</artifactId>
+            <version>${slf4j.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.12.1</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                    <release>17</release>
+                </configuration>
+            </plugin>
+
+            <!-- Enforces minimum Java version -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java</id>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[17,)</version>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Assembles an executable JAR with all dependencies bundled.
+                Run any sample with:
+                  java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+                       com.multiclouddb.samples.PortableCrudQuerySample
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.multiclouddb.samples.PortableCrudQuerySample</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>assemble-jar</id>
+                        <phase>package</phase>
+                        <goals><goal>single</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Run samples directly with Maven:
+                  mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp
+                  mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.todo.TodoApp
+                  mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.PortableCrudQuerySample
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <mainClass>com.multiclouddb.samples.PortableCrudQuerySample</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

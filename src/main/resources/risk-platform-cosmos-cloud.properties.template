@@ -1,0 +1,51 @@
+# ---------------------------------------------------------------------------
+#  Risk Platform: Azure Cosmos DB (Cloud)
+#  -- HOW TO USE -------------------------------------------------------------
+#  Two authentication options are supported. Uncomment the block you want.
+#
+#  OPTION A — Master Key (simpler, no az login needed)
+#  -------------------------------------------------------
+#  Get your endpoint and primary key from Azure Portal → Cosmos DB account → Keys,
+#  or via CLI:
+#    az cosmosdb show --name <ACCOUNT> --resource-group <RG> --query documentEndpoint -o tsv
+#    az cosmosdb keys list --name <ACCOUNT> --resource-group <RG> --query primaryMasterKey -o tsv
+#
+#  OPTION B — Entra ID / DefaultAzureCredential (recommended for production)
+#  --------------------------------------------------------------------------
+#  1. Run `az login` (or set AZURE_CLIENT_ID / AZURE_CLIENT_SECRET / AZURE_TENANT_ID)
+#  2. Assign the "Cosmos DB Built-in Data Contributor" role to your identity
+#  3. Fill in the ARM properties (subscriptionId, resourceGroupName, tenantId)
+#
+#  See README-risk-platform.md → "Create the Cosmos DB Properties File" for
+#  step-by-step instructions for both options.
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=cosmos
+
+# Your Cosmos DB account endpoint (required for both options)
+# Run: az cosmosdb show --name <account> --resource-group <rg> --query documentEndpoint -o tsv
+multiclouddb.connection.endpoint=https://<YOUR-COSMOS-ACCOUNT-NAME>.documents.azure.com:443/
+
+# Use "gateway" for restricted networks / firewalls; "direct" for best performance
+multiclouddb.connection.connectionMode=gateway
+
+# ---------------------------------------------------------------------------
+# OPTION A — Master Key auth  (comment out if using Option B)
+# ---------------------------------------------------------------------------
+# Run: az cosmosdb keys list --name <account> --resource-group <rg> --query primaryMasterKey -o tsv
+# multiclouddb.connection.key=<YOUR-PRIMARY-KEY>
+
+# ---------------------------------------------------------------------------
+# OPTION B — Entra ID auth  (comment out key above; fill in ARM properties below)
+# ---------------------------------------------------------------------------
+# Azure subscription ID that owns the Cosmos DB account
+# Run: az account show --query id -o tsv
+multiclouddb.connection.subscriptionId=<YOUR-SUBSCRIPTION-ID>
+
+# Resource group containing the Cosmos DB account
+# Run: az resource list --resource-type Microsoft.DocumentDB/databaseAccounts --query "[?name=='<account>'].resourceGroup" -o tsv
+multiclouddb.connection.resourceGroupName=<YOUR-RESOURCE-GROUP>
+
+# Azure AD tenant ID (prevents InvalidAuthenticationTokenTenant errors)
+# Run: az account show --query tenantId -o tsv
+multiclouddb.connection.tenantId=<YOUR-TENANT-ID>
