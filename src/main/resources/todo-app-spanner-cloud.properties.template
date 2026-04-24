@@ -1,0 +1,32 @@
+# ---------------------------------------------------------------------------
+#  TODO App: Google Cloud Spanner (Cloud)
+#  -- HOW TO USE -------------------------------------------------------------
+#  1. Copy this file and remove the .template extension:
+#       cp src/main/resources/todo-app-spanner-cloud.properties.template \
+#          src/main/resources/todo-app-spanner-cloud.properties
+#  2. Fill in YOUR values below (marked with <...>)
+#  3. The *.properties file is git-ignored -- it will never be committed.
+#
+#  Authentication uses Application Default Credentials (ADC):
+#    gcloud auth application-default login
+#
+#  See README-todo-app.md → "Spanner Cloud Setup" for step-by-step instructions,
+#  including how to create the Spanner instance, database, and table.
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=spanner
+
+# Your Google Cloud project ID
+# Run: gcloud config get-value project
+multiclouddb.connection.projectId=<YOUR-GCP-PROJECT-ID>
+
+# Your Spanner instance ID
+# Run: gcloud spanner instances list --project=<YOUR-GCP-PROJECT-ID>
+multiclouddb.connection.instanceId=<YOUR-SPANNER-INSTANCE-ID>
+
+# The Spanner database ID (created in Cloud Setup step)
+multiclouddb.connection.databaseId=todoapp
+
+# -- No emulatorHost = connects to real Google Cloud Spanner ----------------
+# For the local emulator, set: multiclouddb.connection.emulatorHost=localhost:9010
+# multiclouddb.connection.emulatorHost=
