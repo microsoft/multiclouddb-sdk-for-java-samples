@@ -89,24 +89,6 @@
         </dependency>
 
         <!-- ============================================================
-             Native cloud SDKs — resolved from Maven Central.
-             ============================================================ -->
-
-        <!-- Azure Cosmos DB (used for resource provisioning in RiskPlatformApp) -->
-        <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-cosmos</artifactId>
-            <version>${azure-cosmos.version}</version>
-        </dependency>
-
-        <!-- AWS DynamoDB (used for resource provisioning in RiskPlatformApp) -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>dynamodb</artifactId>
-            <version>${aws-sdk.version}</version>
-        </dependency>
-
-        <!-- ============================================================
              Utilities
              ============================================================ -->
 
