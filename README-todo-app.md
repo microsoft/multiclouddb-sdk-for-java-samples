@@ -352,13 +352,17 @@ Then open **http://localhost:8080** in your browser.
 > **First time?** Complete [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup) first to
 > create your properties file and provision the required Cosmos DB resources.
 
-```powershell
-# macOS / Linux
+**macOS / Linux:**
+
+```bash
 mvn exec:java \
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
   -Dtodo.config=todo-app-cosmos-cloud.properties
+```
 
-# Windows (PowerShell)
+**Windows (PowerShell):**
+
+```powershell
 mvn exec:java `
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
   "-Dtodo.config=todo-app-cosmos-cloud.properties"
@@ -385,13 +389,17 @@ Then open **http://localhost:8080** in your browser.
 > **First time?** Complete [DynamoDB Cloud Setup](#dynamodb-cloud-setup) first to
 > create your properties file and provision the required DynamoDB table.
 
-```powershell
-# macOS / Linux
+**macOS / Linux:**
+
+```bash
 mvn exec:java \
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
   -Dtodo.config=todo-app-dynamo-cloud.properties
+```
 
-# Windows (PowerShell)
+**Windows (PowerShell):**
+
+```powershell
 mvn exec:java `
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
   "-Dtodo.config=todo-app-dynamo-cloud.properties"
@@ -417,13 +425,17 @@ Then open **http://localhost:8080** in your browser.
 > **First time?** Complete [Spanner Cloud Setup](#spanner-cloud-setup) first to
 > create your properties file and provision the required Spanner resources.
 
-```powershell
-# macOS / Linux
+**macOS / Linux:**
+
+```bash
 mvn exec:java \
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
   -Dtodo.config=todo-app-spanner-cloud.properties
+```
 
-# Windows (PowerShell)
+**Windows (PowerShell):**
+
+```powershell
 mvn exec:java `
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
   "-Dtodo.config=todo-app-spanner-cloud.properties"
@@ -486,6 +498,9 @@ The web app also exposes a JSON REST API:
 > **Note:** Unlike the Risk Platform sample, the TODO app does **not** auto-provision
 > cloud resources on startup. You must create the database/table once before running.
 
+> Run the following steps **in order** in the same terminal. Variables set in one
+> step carry forward to the next — do not close the terminal between steps.
+
 ---
 
 ### Cosmos DB Cloud Setup
@@ -493,101 +508,173 @@ The web app also exposes a JSON REST API:
 #### Step 1 — Create the properties file
 
 The cloud properties file is **git-ignored** and must never be committed.
-Copy the template and fill in your values.
+
+---
 
 **macOS / Linux**
 
+**Step 1 — List your Cosmos DB accounts:**
+
 ```bash
-# Step 1: List your Cosmos DB accounts
 az resource list --resource-type Microsoft.DocumentDB/databaseAccounts \
   --query "[].{Name:name, ResourceGroup:resourceGroup}" -o table
+```
 
-# Step 2: Enter your account name
+**Step 2 — Enter your account name:**
+
+```bash
 printf "Cosmos DB account name: "; read COSMOS_ACCOUNT
+```
 
-# Step 3: Fetch endpoint, resource group, and primary key
+**Step 3 — Fetch the resource group, endpoint, and primary key:**
+
+```bash
 COSMOS_RG=$(az resource list \
   --resource-type Microsoft.DocumentDB/databaseAccounts \
   --query "[?name=='$COSMOS_ACCOUNT'].resourceGroup" -o tsv)
+```
+
+```bash
 COSMOS_ENDPOINT=$(az cosmosdb show \
   --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
   --query documentEndpoint -o tsv)
+```
+
+```bash
 COSMOS_KEY=$(az cosmosdb keys list \
   --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
   --query primaryMasterKey -o tsv)
+```
 
-# Step 4: Write the properties file (Master Key auth)
+**Step 4 — Write the properties file:**
+
+```bash
 cat > src/main/resources/todo-app-cosmos-cloud.properties << EOF
 multiclouddb.provider=cosmos
 multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
 multiclouddb.connection.key=$COSMOS_KEY
 multiclouddb.connection.connectionMode=gateway
 EOF
+```
 
-# Step 5: Verify
+**Step 5 — Verify:**
+
+```bash
 cat src/main/resources/todo-app-cosmos-cloud.properties
 ```
 
+---
+
 **Windows (PowerShell)**
 
+**Step 1 — List your Cosmos DB accounts:**
+
 ```powershell
-# Step 1: List your Cosmos DB accounts
 az resource list --resource-type Microsoft.DocumentDB/databaseAccounts `
   --query "[].{Name:name, ResourceGroup:resourceGroup}" -o table
+```
 
-# Step 2: Enter your account name
+**Step 2 — Enter your account name:**
+
+```powershell
 $COSMOS_ACCOUNT = Read-Host "Cosmos DB account name"
+```
 
-# Step 3: Fetch endpoint, resource group, and primary key
-$COSMOS_RG       = (az resource list `
+**Step 3 — Fetch the resource group:**
+
+```powershell
+$COSMOS_RG = (az resource list `
   --resource-type Microsoft.DocumentDB/databaseAccounts `
   --query "[?name=='$COSMOS_ACCOUNT'].resourceGroup" -o tsv)
+```
+
+**Step 4 — Fetch the endpoint:**
+
+```powershell
 $COSMOS_ENDPOINT = (az cosmosdb show `
   --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
   --query documentEndpoint -o tsv)
-$COSMOS_KEY      = (az cosmosdb keys list `
+```
+
+**Step 5 — Fetch the primary key:**
+
+```powershell
+$COSMOS_KEY = (az cosmosdb keys list `
   --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
   --query primaryMasterKey -o tsv)
+```
 
-# Step 4: Write the properties file (Master Key auth)
+**Step 6 — Write the properties file:**
+
+```powershell
 @"
 multiclouddb.provider=cosmos
 multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
 multiclouddb.connection.key=$COSMOS_KEY
 multiclouddb.connection.connectionMode=gateway
 "@ | Set-Content src\main\resources\todo-app-cosmos-cloud.properties
+```
 
-# Step 5: Verify
+**Step 7 — Verify:**
+
+```powershell
 Get-Content src\main\resources\todo-app-cosmos-cloud.properties
 ```
+
+> **Don't have the Azure CLI?**
+> Get your endpoint and key from the [Azure Portal](https://portal.azure.com)
+> → your Cosmos DB account → **Keys**, then create the file manually:
+> ```properties
+> multiclouddb.provider=cosmos
+> multiclouddb.connection.endpoint=https://<YOUR-ACCOUNT>.documents.azure.com:443/
+> multiclouddb.connection.key=<YOUR-PRIMARY-KEY>
+> multiclouddb.connection.connectionMode=gateway
+> ```
 
 > **Using Entra ID instead of a master key?** See
 > `todo-app-cosmos-cloud.properties.template` for Option B (DefaultAzureCredential)
 > instructions, which requires assigning the _Cosmos DB Built-in Data Contributor_ role.
 
+---
+
 #### Step 2 — Create the Cosmos DB database and container
 
-The SDK expects a database named `todoapp` and a container named `todos` with
-partition key `/partitionKey`.
+The SDK expects database `todoapp` and container `todos` with partition key `/partitionKey`.
+
+**macOS / Linux**
+
+**Step 1 — Create the database:**
 
 ```bash
-# macOS / Linux
 az cosmosdb sql database create \
   --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
   --name todoapp
+```
 
+**Step 2 — Create the container:**
+
+```bash
 az cosmosdb sql container create \
   --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
   --database-name todoapp --name todos \
   --partition-key-path /partitionKey
 ```
 
+---
+
+**Windows (PowerShell)**
+
+**Step 1 — Create the database:**
+
 ```powershell
-# Windows (PowerShell)
 az cosmosdb sql database create `
   --account-name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
   --name todoapp
+```
 
+**Step 2 — Create the container:**
+
+```powershell
 az cosmosdb sql container create `
   --account-name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
   --database-name todoapp --name todos `
@@ -598,13 +685,32 @@ az cosmosdb sql container create `
 > **New Container** with database id `todoapp`, container id `todos`,
 > partition key `/partitionKey`.
 
+---
+
 #### Step 3 — Build and run
+
+**Step 1 — Compile (picks up the new properties file):**
 
 ```bash
 mvn compile
+```
+
+**Step 2 — Run:**
+
+**macOS / Linux:**
+
+```bash
 mvn exec:java \
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
   -Dtodo.config=todo-app-cosmos-cloud.properties
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn exec:java `
+  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
+  "-Dtodo.config=todo-app-cosmos-cloud.properties"
 ```
 
 ---
@@ -613,48 +719,76 @@ mvn exec:java \
 
 #### Step 1 — Configure AWS credentials
 
+**Step 1 — Run the interactive setup wizard:**
+
 ```bash
 aws configure
-# Prompts for: AWS Access Key ID, Secret Access Key, region, output format
 ```
 
-Or use environment variables:
+> Prompts for: AWS Access Key ID, Secret Access Key, default region, output format.
 
-```bash
-export AWS_ACCESS_KEY_ID=<YOUR-KEY-ID>
-export AWS_SECRET_ACCESS_KEY=<YOUR-SECRET>
-export AWS_REGION=us-east-1
-```
+---
 
 #### Step 2 — Create the properties file
 
 **macOS / Linux**
 
+**Step 1 — Read the configured region:**
+
 ```bash
 export AWS_REGION="$(aws configure get region)"
+```
+
+**Step 2 — Write the properties file:**
+
+```bash
 cat > src/main/resources/todo-app-dynamo-cloud.properties << EOF
 multiclouddb.provider=dynamo
 multiclouddb.connection.region=$AWS_REGION
 EOF
 ```
 
+**Step 3 — Verify:**
+
+```bash
+cat src/main/resources/todo-app-dynamo-cloud.properties
+```
+
+---
+
 **Windows (PowerShell)**
+
+**Step 1 — Read the configured region:**
 
 ```powershell
 $AWS_REGION = (aws configure get region)
+```
+
+**Step 2 — Write the properties file:**
+
+```powershell
 @"
 multiclouddb.provider=dynamo
 multiclouddb.connection.region=$AWS_REGION
 "@ | Set-Content src\main\resources\todo-app-dynamo-cloud.properties
 ```
 
+**Step 3 — Verify:**
+
+```powershell
+Get-Content src\main\resources\todo-app-dynamo-cloud.properties
+```
+
+---
+
 #### Step 3 — Create the DynamoDB table
 
 The SDK maps `ResourceAddress("todoapp", "todos")` to a table named `todoapp__todos`
-with hash key `partitionKey` and range key `sortKey`.
+with hash key `partitionKey` (String) and range key `sortKey` (String).
+
+**macOS / Linux:**
 
 ```bash
-# macOS / Linux
 aws dynamodb create-table \
   --table-name todoapp__todos \
   --attribute-definitions \
@@ -667,8 +801,9 @@ aws dynamodb create-table \
   --region "$AWS_REGION"
 ```
 
+**Windows (PowerShell):**
+
 ```powershell
-# Windows (PowerShell)
 aws dynamodb create-table `
   --table-name todoapp__todos `
   --attribute-definitions `
@@ -681,36 +816,73 @@ aws dynamodb create-table `
   --region $AWS_REGION
 ```
 
+---
+
 #### Step 4 — Build and run
+
+**Step 1 — Compile (picks up the new properties file):**
 
 ```bash
 mvn compile
+```
+
+**Step 2 — Run:**
+
+**macOS / Linux:**
+
+```bash
 mvn exec:java \
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
   -Dtodo.config=todo-app-dynamo-cloud.properties
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn exec:java `
+  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
+  "-Dtodo.config=todo-app-dynamo-cloud.properties"
 ```
 
 ---
 
 ### Spanner Cloud Setup
 
-#### Step 1 — Enable the Cloud Spanner API and authenticate
+#### Step 1 — Enable the Cloud Spanner API
 
 ```bash
-# Enable the API (one-time per project)
 gcloud services enable spanner.googleapis.com
+```
 
-# Set up Application Default Credentials
+---
+
+#### Step 2 — Authenticate
+
+```bash
 gcloud auth application-default login
 ```
 
-#### Step 2 — Create the properties file
+---
+
+#### Step 3 — Create the properties file
+
+**macOS / Linux**
+
+**Step 1 — Enter your GCP project ID:**
 
 ```bash
-# macOS / Linux
 printf "GCP project ID: "; read GCP_PROJECT
-printf "Spanner instance ID: "; read SPANNER_INSTANCE
+```
 
+**Step 2 — Enter your Spanner instance ID:**
+
+```bash
+printf "Spanner instance ID: "; read SPANNER_INSTANCE
+```
+
+**Step 3 — Write the properties file:**
+
+```bash
 cat > src/main/resources/todo-app-spanner-cloud.properties << EOF
 multiclouddb.provider=spanner
 multiclouddb.connection.projectId=$GCP_PROJECT
@@ -719,11 +891,31 @@ multiclouddb.connection.databaseId=todoapp
 EOF
 ```
 
-```powershell
-# Windows (PowerShell)
-$GCP_PROJECT      = Read-Host "GCP project ID"
-$SPANNER_INSTANCE = Read-Host "Spanner instance ID"
+**Step 4 — Verify:**
 
+```bash
+cat src/main/resources/todo-app-spanner-cloud.properties
+```
+
+---
+
+**Windows (PowerShell)**
+
+**Step 1 — Enter your GCP project ID:**
+
+```powershell
+$GCP_PROJECT = Read-Host "GCP project ID"
+```
+
+**Step 2 — Enter your Spanner instance ID:**
+
+```powershell
+$SPANNER_INSTANCE = Read-Host "Spanner instance ID"
+```
+
+**Step 3 — Write the properties file:**
+
+```powershell
 @"
 multiclouddb.provider=spanner
 multiclouddb.connection.projectId=$GCP_PROJECT
@@ -732,9 +924,19 @@ multiclouddb.connection.databaseId=todoapp
 "@ | Set-Content src\main\resources\todo-app-spanner-cloud.properties
 ```
 
-#### Step 3 — Create the Spanner instance, database, and table
+**Step 4 — Verify:**
 
-**Create a Spanner instance** (skip if you already have one):
+```powershell
+Get-Content src\main\resources\todo-app-spanner-cloud.properties
+```
+
+---
+
+#### Step 4 — Create the Spanner instance
+
+> Skip this step if you already have a Spanner instance to use.
+
+**macOS / Linux:**
 
 ```bash
 gcloud spanner instances create "$SPANNER_INSTANCE" \
@@ -744,30 +946,68 @@ gcloud spanner instances create "$SPANNER_INSTANCE" \
   --project="$GCP_PROJECT"
 ```
 
-> See [available configurations](https://cloud.google.com/spanner/docs/instance-configurations)
+**Windows (PowerShell):**
+
+```powershell
+gcloud spanner instances create $SPANNER_INSTANCE `
+  --config=regional-us-central1 `
+  --description="Todo App Instance" `
+  --processing-units=100 `
+  --project=$GCP_PROJECT
+```
+
+> See [available instance configurations](https://cloud.google.com/spanner/docs/instance-configurations)
 > for a region closest to you (e.g. `regional-us-east1`, `regional-europe-west1`).
 
-**Create the database and table:**
+---
+
+#### Step 5 — Create the Spanner database and table
+
+**macOS / Linux:**
 
 ```bash
 gcloud spanner databases create todoapp \
   --instance="$SPANNER_INSTANCE" \
   --project="$GCP_PROJECT" \
-  --ddl="CREATE TABLE todos (
-    partitionKey STRING(MAX) NOT NULL,
-    sortKey      STRING(MAX) NOT NULL,
-    data         STRING(MAX)
-  ) PRIMARY KEY (partitionKey, sortKey)"
+  --ddl="CREATE TABLE todos (partitionKey STRING(MAX) NOT NULL, sortKey STRING(MAX) NOT NULL, data STRING(MAX)) PRIMARY KEY (partitionKey, sortKey)"
+```
+
+**Windows (PowerShell):**
+
+```powershell
+gcloud spanner databases create todoapp `
+  --instance=$SPANNER_INSTANCE `
+  --project=$GCP_PROJECT `
+  --ddl="CREATE TABLE todos (partitionKey STRING(MAX) NOT NULL, sortKey STRING(MAX) NOT NULL, data STRING(MAX)) PRIMARY KEY (partitionKey, sortKey)"
 ```
 
 > The `data` column stores the full TODO document as a JSON string.
 > The app uses `partitionKey = todoId` and `sortKey = todoId`.
 
-#### Step 4 — Build and run
+---
+
+#### Step 6 — Build and run
+
+**Step 1 — Compile (picks up the new properties file):**
 
 ```bash
 mvn compile
+```
+
+**Step 2 — Run:**
+
+**macOS / Linux:**
+
+```bash
 mvn exec:java \
   -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
   -Dtodo.config=todo-app-spanner-cloud.properties
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn exec:java `
+  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
+  "-Dtodo.config=todo-app-spanner-cloud.properties"
 ```
