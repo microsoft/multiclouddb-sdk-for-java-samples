@@ -536,21 +536,17 @@ all platforms.
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=risk-platform-cosmos.properties" `
-  "-Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local" `
-  "-Djavax.net.ssl.trustStorePassword=changeit"
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath -Drisk.config=risk-platform-cosmos.properties -Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **macOS / Linux (Bash):**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-cosmos.properties \
-  "-Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local" \
-  -Djavax.net.ssl.trustStorePassword=changeit
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-cosmos.properties -Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 Wait for the startup log to show:
@@ -826,17 +822,17 @@ In the **second terminal**, from the **repo root**:
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=risk-platform-dynamo.properties"
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath -Drisk.config=risk-platform-dynamo.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **macOS / Linux (Bash):**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-dynamo.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-dynamo.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 Wait for the startup log to show:
@@ -961,16 +957,16 @@ publicly trusted TLS certificate.
 
 **macOS / Linux:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-cosmos-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-cosmos-cloud.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=risk-platform-cosmos-cloud.properties"
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath -Drisk.config=risk-platform-cosmos-cloud.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 On first run, the app auto-provisions all databases and containers via the
@@ -1163,16 +1159,16 @@ Run from the **repo root**.
 
 **macOS / Linux:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-dynamo-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-dynamo-cloud.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=risk-platform-dynamo-cloud.properties"
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath -Drisk.config=risk-platform-dynamo-cloud.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 On first run, the app auto-provisions all DynamoDB tables then seeds demo data.
@@ -1315,18 +1311,16 @@ then re-run with the parameters for the desired provider.
 
 **macOS / Linux:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=<CONFIG_FILE> \
-  [<EXTRA_ARGS>]
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath [<EXTRA_ARGS>] -Drisk.config=<CONFIG_FILE> com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=<CONFIG_FILE>" `
-  [<EXTRA_ARGS>]
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath [<EXTRA_ARGS>] -Drisk.config=<CONFIG_FILE> com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 Replace `<CONFIG_FILE>` and `<EXTRA_ARGS>` using the table below.
@@ -1353,20 +1347,16 @@ Replace `<CONFIG_FILE>` and `<EXTRA_ARGS>` using the table below.
 
 **macOS / Linux:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-cosmos.properties \
-  -Djavax.net.ssl.trustStore=.tools/cacerts-local \
-  -Djavax.net.ssl.trustStorePassword=changeit
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-cosmos.properties -Djavax.net.ssl.trustStore=.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=risk-platform-cosmos.properties" `
-  "-Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local" `
-  "-Djavax.net.ssl.trustStorePassword=changeit"
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath -Drisk.config=risk-platform-cosmos.properties -Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 ---
@@ -1375,20 +1365,16 @@ mvn exec:java `
 
 **macOS / Linux / Windows:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-dynamo.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-dynamo.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
-
----
-
-**Option C — Cosmos DB Cloud**
 
 **macOS / Linux / Windows:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-cosmos-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-cosmos-cloud.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 ---
@@ -1397,9 +1383,9 @@ mvn exec:java \
 
 **macOS / Linux / Windows:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-dynamo-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-dynamo-cloud.properties com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 ---
@@ -1468,22 +1454,16 @@ Open **http://localhost:8001** to browse DynamoDB tables and items.
 
 **macOS / Linux:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-cosmos.properties \
-  -Djavax.net.ssl.trustStore=.tools/cacerts-local \
-  -Djavax.net.ssl.trustStorePassword=changeit \
-  -Drisk.port=8090
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-cosmos.properties -Djavax.net.ssl.trustStore=.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit -Drisk.port=8090 com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-mvn exec:java `
-  "-Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp" `
-  "-Drisk.config=risk-platform-cosmos.properties" `
-  "-Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local" `
-  "-Djavax.net.ssl.trustStorePassword=changeit" `
-  "-Drisk.port=8090"
+mvn exec:exec `
+  "-Dexec.executable=java" `
+  "-Dexec.args=-cp %classpath -Drisk.config=risk-platform-cosmos.properties -Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit -Drisk.port=8090 com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 > Truststore not created yet? See [Step A3](#a3--create-the-ssl-truststore).
@@ -1494,10 +1474,9 @@ mvn exec:java `
 
 **macOS / Linux / Windows:**
 ```bash
-mvn exec:java \
-  -Dexec.mainClass=com.multiclouddb.samples.riskplatform.RiskPlatformApp \
-  -Drisk.config=risk-platform-dynamo.properties \
-  -Drisk.port=8091
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Drisk.config=risk-platform-dynamo.properties -Drisk.port=8091 com.multiclouddb.samples.riskplatform.RiskPlatformApp"
 ```
 
 ---

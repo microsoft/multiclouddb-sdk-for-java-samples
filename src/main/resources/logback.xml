@@ -7,11 +7,14 @@
 
     <!-- Suppress verbose SDK logging -->
     <logger name="com.azure" level="WARN"/>
+    <logger name="com.azure.cosmos" level="ERROR"/>
     <logger name="software.amazon" level="WARN"/>
     <logger name="io.netty" level="WARN"/>
     <logger name="reactor" level="WARN"/>
 
-    <logger name="com.multiclouddb" level="INFO"/>
+    <logger name="com.multiclouddb" level="WARN"/>
+    <logger name="com.multiclouddb.provider" level="ERROR"/>
+    <logger name="com.multiclouddb.samples" level="INFO"/>
 
     <root level="WARN">
         <appender-ref ref="STDOUT"/>
