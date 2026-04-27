@@ -56,7 +56,7 @@ public class PortableCrudQuerySample {
         System.out.println();
 
         // Resource address comes from config — no provider-specific code needed
-        String database = appConfig.property("multiclouddb.database", "todoapp");
+        String database = appConfig.property("multiclouddb.database", "multiclouddb-sdk-for-java-todo-app");
         String collection = appConfig.property("multiclouddb.collection", "todos");
         ResourceAddress address = new ResourceAddress(database, collection);
 

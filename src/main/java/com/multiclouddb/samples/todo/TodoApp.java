@@ -29,6 +29,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -51,7 +52,7 @@ public class TodoApp {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final String DATABASE = "todoapp";
+    private static final String DATABASE   = "multiclouddb-sdk-for-java-todo-app";
     private static final String COLLECTION = "todos";
     private static final int DEFAULT_PORT = 8080;
 
@@ -334,6 +335,10 @@ public class TodoApp {
                 System.getProperty("todo.port", String.valueOf(DEFAULT_PORT)));
 
         MulticloudDbClient client = MulticloudDbClientFactory.create(config);
+
+        System.out.println("  Provisioning resources...");
+        client.provisionSchema(Map.of(DATABASE, List.of(COLLECTION)));
+
         TodoApp app = new TodoApp(client);
         app.startServer(port);
 

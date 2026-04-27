@@ -8,6 +8,8 @@
     <!-- Suppress verbose SDK logging -->
     <logger name="com.azure" level="WARN"/>
     <logger name="com.azure.cosmos" level="ERROR"/>
+    <!-- RxGatewayStoreModel logs expected 404s as ERROR during schema provisioning probes -->
+    <logger name="com.azure.cosmos.implementation.RxGatewayStoreModel" level="OFF"/>
     <logger name="software.amazon" level="WARN"/>
     <logger name="io.netty" level="WARN"/>
     <logger name="reactor" level="WARN"/>

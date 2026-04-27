@@ -21,19 +21,21 @@ import java.util.*;
  */
 public class ResourceProvisioner {
 
+    private static final String PREFIX   = "multiclouddb-sdk-for-java-";
+
     /** Admin database storing the tenant registry. */
-    private static final String ADMIN_DB = "riskplatform-admin";
+    private static final String ADMIN_DB = PREFIX + "risk-admin";
 
     /** Full schema: database name → collections to ensure. */
     private static final Map<String, List<String>> SCHEMA;
 
     static {
         Map<String, List<String>> m = new LinkedHashMap<>();
-        m.put(ADMIN_DB,                   List.of("tenants"));
-        m.put("acme-capital-risk-db",     List.of("portfolios", "positions", "risk_metrics", "alerts"));
-        m.put("vanguard-partners-risk-db", List.of("portfolios", "positions", "risk_metrics", "alerts"));
-        m.put("summit-wealth-risk-db",    List.of("portfolios", "positions", "risk_metrics", "alerts"));
-        m.put("_shared-risk-db",          List.of("market_data"));
+        m.put(ADMIN_DB,                               List.of("tenants"));
+        m.put(PREFIX + "risk-acme-capital",           List.of("portfolios", "positions", "risk_metrics", "alerts"));
+        m.put(PREFIX + "risk-vanguard-partners",      List.of("portfolios", "positions", "risk_metrics", "alerts"));
+        m.put(PREFIX + "risk-summit-wealth",          List.of("portfolios", "positions", "risk_metrics", "alerts"));
+        m.put(PREFIX + "risk-shared",                 List.of("market_data"));
         SCHEMA = Collections.unmodifiableMap(m);
     }
 

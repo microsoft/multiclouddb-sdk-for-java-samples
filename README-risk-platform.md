@@ -1028,7 +1028,7 @@ Get-NetTCPConnection -LocalPort 8090 -ErrorAction SilentlyContinue |
 > **Note:** Cosmos DB databases persist until explicitly deleted. Run this when
 > you no longer need the demo data and want to remove all provisioned databases.
 
-A cleanup script is provided in `multiclouddb-samples/scripts/`. It reads your
+A cleanup script is provided in `scripts/`. It reads your
 account name and resource group directly from the properties file — no manual
 editing required.
 
@@ -1037,18 +1037,18 @@ editing required.
 First time only — make the script executable:
 
 ```bash
-chmod +x multiclouddb-samples/scripts/cleanup-cosmos.sh
+chmod +x scripts/cleanup-cosmos.sh
 ```
 
 Run the cleanup script:
 
 ```bash
-./multiclouddb-samples/scripts/cleanup-cosmos.sh
+./scripts/cleanup-cosmos.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-.\multiclouddb-samples\scripts\cleanup-cosmos.ps1
+.\scripts\cleanup-cosmos.ps1
 ```
 
 To override the account or resource group without editing any file:
@@ -1056,12 +1056,12 @@ To override the account or resource group without editing any file:
 **macOS / Linux:**
 ```bash
 COSMOS_ACCOUNT=my-account RESOURCE_GROUP=my-rg \
-  ./multiclouddb-samples/scripts/cleanup-cosmos.sh
+  ./scripts/cleanup-cosmos.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-.\multiclouddb-samples\scripts\cleanup-cosmos.ps1 -CosmosAccount my-account -ResourceGroup my-rg
+.\scripts\cleanup-cosmos.ps1 -CosmosAccount my-account -ResourceGroup my-rg
 ```
 
 Example output:
@@ -1229,7 +1229,7 @@ Get-NetTCPConnection -LocalPort 8090 -ErrorAction SilentlyContinue |
 > **Cost note:** DynamoDB charges for storage and on-demand read/write capacity.
 > Delete the tables after testing to avoid ongoing charges.
 
-A cleanup script is provided in `multiclouddb-samples/scripts/`. It reads your
+A cleanup script is provided in `scripts/`. It reads your
 region automatically from `aws configure` (or prompts you), lists what it will
 delete, and asks for confirmation before proceeding.
 
@@ -1238,32 +1238,32 @@ delete, and asks for confirmation before proceeding.
 First time only — make the script executable:
 
 ```bash
-chmod +x multiclouddb-samples/scripts/cleanup-dynamo.sh
+chmod +x scripts/cleanup-dynamo.sh
 ```
 
 Run the cleanup script:
 
 ```bash
-./multiclouddb-samples/scripts/cleanup-dynamo.sh
+./scripts/cleanup-dynamo.sh
 ```
 
 **Windows (PowerShell):**
 ```powershell
-.\multiclouddb-samples\scripts\cleanup-dynamo.ps1
+.\scripts\cleanup-dynamo.ps1
 ```
 
 To override the region without editing any file, pass it inline:
 
 **macOS / Linux:**
 ```bash
-AWS_REGION=eu-west-1 ./multiclouddb-samples/scripts/cleanup-dynamo.sh
+AWS_REGION=eu-west-1 ./scripts/cleanup-dynamo.sh
 ```
 
 > `chmod +x` only needs to be run once. After that, the script is permanently executable.
 
 **Windows (PowerShell):**
 ```powershell
-.\multiclouddb-samples\scripts\cleanup-dynamo.ps1 -Region eu-west-1
+.\scripts\cleanup-dynamo.ps1 -Region eu-west-1
 ```
 
 Example output:

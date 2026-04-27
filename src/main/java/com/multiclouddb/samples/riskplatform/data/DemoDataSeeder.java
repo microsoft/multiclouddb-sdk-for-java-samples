@@ -222,7 +222,7 @@ public class DemoDataSeeder {
         private void putMarket(String symbol, double price, double change,
                         double changePct, double high, double low, long volume) {
                 ObjectNode doc = Models.marketData(symbol, price, change, changePct, high, low, volume);
-                var addr = tenantManager.addressFor("_shared", "market_data");
+                var addr = tenantManager.addressFor("shared", "market_data");
                 tenantManager.getClient().upsert(addr, MulticloudDbKey.of(symbol, symbol), MAPPER.convertValue(doc, MAP_TYPE));
         }
 }
