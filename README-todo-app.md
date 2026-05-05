@@ -30,6 +30,10 @@ browser-based UI for creating, reading, updating, and deleting TODO items.
    - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
    - [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
    - [Spanner Cloud Setup](#spanner-cloud-setup)
+6. [Cleanup](#cleanup)
+   - [Clean up Cosmos DB resources](#clean-up-cosmos-db-resources)
+   - [Clean up DynamoDB resources](#clean-up-dynamodb-resources)
+   - [Clean up Spanner resources](#clean-up-spanner-resources)
 
 ---
 
@@ -301,13 +305,18 @@ mvn clean install -DskipTests
 Make sure the Cosmos DB emulator is running and the `todoapp` / `todos`
 database/container exists.
 
+**Step 1 — Compile:**
+
+```bash
+mvn compile
+```
+
+**Step 2 — Run:**
+
 ```powershell
-# Start the web app (Cosmos DB)
-mvn -pl multiclouddb-samples exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-cosmos.properties" `
-  "-Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local" `
-  "-Djavax.net.ssl.trustStorePassword=changeit"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-cosmos.properties -Djavax.net.ssl.trustStore=$PWD/.tools/cacerts-local -Djavax.net.ssl.trustStorePassword=changeit com.multiclouddb.samples.todo.TodoApp"
 ```
 
 Then open **http://localhost:8080** in your browser.
@@ -319,11 +328,18 @@ Then open **http://localhost:8080** in your browser.
 
 Make sure DynamoDB Local is running on port 8000.
 
+**Step 1 — Compile:**
+
+```bash
+mvn compile
+```
+
+**Step 2 — Run:**
+
 ```powershell
-# Start the web app (DynamoDB)
-mvn -pl multiclouddb-samples exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-dynamo.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-dynamo.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 Then open **http://localhost:8080** in your browser.
@@ -336,11 +352,18 @@ Then open **http://localhost:8080** in your browser.
 Make sure the Spanner emulator is running and the instance/database exists
 (see [Spanner Emulator Setup](#google-cloud-spanner-emulator) below).
 
+**Step 1 — Compile:**
+
+```bash
+mvn compile
+```
+
+**Step 2 — Run:**
+
 ```powershell
-# Start the web app (Spanner)
-mvn -pl multiclouddb-samples exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-spanner.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-spanner.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 Then open **http://localhost:8080** in your browser.
@@ -352,20 +375,28 @@ Then open **http://localhost:8080** in your browser.
 > **First time?** Complete [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup) first to
 > create your properties file and provision the required Cosmos DB resources.
 
+**Step 1 — Compile:**
+
+```bash
+mvn compile
+```
+
+**Step 2 — Run:**
+
 **macOS / Linux:**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
-  -Dtodo.config=todo-app-cosmos-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Dtodo.config=todo-app-cosmos-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-cosmos-cloud.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-cosmos-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 Expected startup output:
@@ -379,8 +410,6 @@ Expected startup output:
 
 Then open **http://localhost:8080** in your browser.
 
-> **Properties file not found?** The app loads from the compiled classpath.
-> If you created the file after your last build, run `mvn compile` first.
 
 ---
 
@@ -389,20 +418,28 @@ Then open **http://localhost:8080** in your browser.
 > **First time?** Complete [DynamoDB Cloud Setup](#dynamodb-cloud-setup) first to
 > create your properties file and provision the required DynamoDB table.
 
+**Step 1 — Compile:**
+
+```bash
+mvn compile
+```
+
+**Step 2 — Run:**
+
 **macOS / Linux:**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
-  -Dtodo.config=todo-app-dynamo-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Dtodo.config=todo-app-dynamo-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-dynamo-cloud.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-dynamo-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 Expected startup output:
@@ -416,7 +453,6 @@ Expected startup output:
 
 Then open **http://localhost:8080** in your browser.
 
-> **Properties file not found?** Run `mvn compile` after creating the file.
 
 ---
 
@@ -425,20 +461,28 @@ Then open **http://localhost:8080** in your browser.
 > **First time?** Complete [Spanner Cloud Setup](#spanner-cloud-setup) first to
 > create your properties file and provision the required Spanner resources.
 
+**Step 1 — Compile:**
+
+```bash
+mvn compile
+```
+
+**Step 2 — Run:**
+
 **macOS / Linux:**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
-  -Dtodo.config=todo-app-spanner-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Dtodo.config=todo-app-spanner-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-spanner-cloud.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-spanner-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 Expected startup output:
@@ -452,7 +496,6 @@ Expected startup output:
 
 Then open **http://localhost:8080** in your browser.
 
-> **Properties file not found?** Run `mvn compile` after creating the file.
 
 ---
 
@@ -494,9 +537,6 @@ The web app also exposes a JSON REST API:
 ---
 
 ## Cloud Setup
-
-> **Note:** Unlike the Risk Platform sample, the TODO app does **not** auto-provision
-> cloud resources on startup. You must create the database/table once before running.
 
 > Run the following steps **in order** in the same terminal. Variables set in one
 > step carry forward to the next — do not close the terminal between steps.
@@ -700,17 +740,44 @@ mvn compile
 **macOS / Linux:**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
-  -Dtodo.config=todo-app-cosmos-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Dtodo.config=todo-app-cosmos-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-cosmos-cloud.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-cosmos-cloud.properties com.multiclouddb.samples.todo.TodoApp"
+```
+
+---
+
+#### Step 4 — Clean up Cosmos DB resources (optional)
+
+> Run this when you no longer need the sample data and want to remove all
+> provisioned resources.
+
+**macOS / Linux:**
+
+First time only — make the script executable:
+
+```bash
+chmod +x scripts/cleanup-cosmos.sh
+```
+
+Run the cleanup:
+
+```bash
+./scripts/cleanup-cosmos.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\cleanup-cosmos.ps1
 ```
 
 ---
@@ -831,17 +898,44 @@ mvn compile
 **macOS / Linux:**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
-  -Dtodo.config=todo-app-dynamo-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Dtodo.config=todo-app-dynamo-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-dynamo-cloud.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-dynamo-cloud.properties com.multiclouddb.samples.todo.TodoApp"
+```
+
+---
+
+#### Step 5 — Clean up DynamoDB resources (optional)
+
+> **Cost note:** DynamoDB charges for storage and on-demand capacity.
+> Delete the table after testing to avoid ongoing charges.
+
+**macOS / Linux:**
+
+First time only — make the script executable:
+
+```bash
+chmod +x scripts/cleanup-dynamo.sh
+```
+
+Run the cleanup:
+
+```bash
+./scripts/cleanup-dynamo.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\cleanup-dynamo.ps1
 ```
 
 ---
@@ -999,15 +1093,165 @@ mvn compile
 **macOS / Linux:**
 
 ```bash
-mvn exec:java \
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" \
-  -Dtodo.config=todo-app-spanner-cloud.properties
+mvn exec:exec \
+  -Dexec.executable="java" \
+  -Dexec.args="-cp %classpath -Dtodo.config=todo-app-spanner-cloud.properties com.multiclouddb.samples.todo.TodoApp"
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-mvn exec:java `
-  -Dexec.mainClass="com.multiclouddb.samples.todo.TodoApp" `
-  "-Dtodo.config=todo-app-spanner-cloud.properties"
+mvn exec:exec `
+  -Dexec.executable="java" `
+  "-Dexec.args=-cp %classpath -Dtodo.config=todo-app-spanner-cloud.properties com.multiclouddb.samples.todo.TodoApp"
+```
+
+---
+
+#### Step 5 — Clean up Spanner resources (optional)
+
+> **Cost note:** Spanner instances are billed by the hour. Delete the database
+> after testing to avoid ongoing charges.
+
+**macOS / Linux:**
+
+First time only — make the script executable:
+
+```bash
+chmod +x scripts/cleanup-spanner.sh
+```
+
+Run the cleanup:
+
+```bash
+./scripts/cleanup-spanner.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\cleanup-spanner.ps1
+```
+
+---
+
+## Cleanup
+
+Use these scripts to delete all cloud resources created by the sample runs.
+Each script reads your credentials from the corresponding properties file
+automatically, shows a preview of what will be deleted, and asks for
+confirmation before proceeding.
+
+### Clean up Cosmos DB resources
+
+**macOS / Linux:**
+
+First time only:
+
+```bash
+chmod +x scripts/cleanup-cosmos.sh
+```
+
+Run:
+
+```bash
+./scripts/cleanup-cosmos.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\cleanup-cosmos.ps1
+```
+
+To override account or resource group without editing any file:
+
+**macOS / Linux:**
+```bash
+COSMOS_ACCOUNT=my-account RESOURCE_GROUP=my-rg \
+  ./scripts/cleanup-cosmos.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\cleanup-cosmos.ps1 -CosmosAccount my-account -ResourceGroup my-rg
+```
+
+---
+
+### Clean up DynamoDB resources
+
+> **Cost note:** DynamoDB charges for storage and on-demand capacity.
+> Delete tables after testing to avoid ongoing charges.
+
+**macOS / Linux:**
+
+First time only:
+
+```bash
+chmod +x scripts/cleanup-dynamo.sh
+```
+
+Run:
+
+```bash
+./scripts/cleanup-dynamo.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\cleanup-dynamo.ps1
+```
+
+To override the region:
+
+**macOS / Linux:**
+```bash
+AWS_REGION=eu-west-1 ./scripts/cleanup-dynamo.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\cleanup-dynamo.ps1 -Region eu-west-1
+```
+
+---
+
+### Clean up Spanner resources
+
+> **Cost note:** Spanner instances are billed by the hour. Delete databases
+> after testing to avoid ongoing charges.
+
+**macOS / Linux:**
+
+First time only:
+
+```bash
+chmod +x scripts/cleanup-spanner.sh
+```
+
+Run:
+
+```bash
+./scripts/cleanup-spanner.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\cleanup-spanner.ps1
+```
+
+To override project or instance:
+
+**macOS / Linux:**
+```bash
+GCP_PROJECT=my-project SPANNER_INSTANCE=my-instance \
+  ./scripts/cleanup-spanner.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\scripts\cleanup-spanner.ps1 -GcpProject my-project -SpannerInstance my-instance
 ```

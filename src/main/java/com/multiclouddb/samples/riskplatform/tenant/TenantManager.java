@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * Implements <b>database-per-tenant</b> isolation using the portable
  * {@link ResourceAddress} model. Each tenant gets a logical database
- * (e.g. {@code "acme-capital-risk-db"}) with collections for portfolios,
+ * (e.g. {@code "risk-acme-capital"}) with collections for portfolios,
  * positions, risk metrics, and alerts.
  * <p>
  * The SDK's provider layer handles the mapping from logical
@@ -43,7 +43,7 @@ public class TenantManager {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     /** Admin database for the tenant registry. */
-    private static final String ADMIN_DB = "riskplatform-admin";
+    private static final String ADMIN_DB = "multiclouddb-sdk-for-java-risk-admin";
     private static final String TENANTS_COLLECTION = "tenants";
 
     private final MulticloudDbClient client;
@@ -63,7 +63,7 @@ public class TenantManager {
         JsonNode doc = Models.tenant(tenantId, name, tier, industry);
         MulticloudDbKey key = MulticloudDbKey.of(tenantId, tenantId);
         client.upsert(addr, key, MAPPER.convertValue(doc, MAP_TYPE));
-        tenantDatabases.put(tenantId, tenantId + "-risk-db");
+        tenantDatabases.put(tenantId, "multiclouddb-sdk-for-java-risk-" + tenantId);
         return doc;
     }
 
@@ -108,7 +108,7 @@ public class TenantManager {
      */
     public ResourceAddress addressFor(String tenantId, String collection) {
         String database = tenantDatabases.computeIfAbsent(tenantId,
-                id -> id + "-risk-db");
+                id -> "multiclouddb-sdk-for-java-risk-" + id);
         return new ResourceAddress(database, collection);
     }
 

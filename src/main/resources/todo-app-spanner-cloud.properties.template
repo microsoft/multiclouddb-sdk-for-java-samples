@@ -25,7 +25,7 @@ multiclouddb.connection.projectId=<YOUR-GCP-PROJECT-ID>
 multiclouddb.connection.instanceId=<YOUR-SPANNER-INSTANCE-ID>
 
 # The Spanner database ID (created in Cloud Setup step)
-multiclouddb.connection.databaseId=todoapp
+multiclouddb.connection.databaseId=multiclouddb-sdk-for-java-todo-app
 
 # -- No emulatorHost = connects to real Google Cloud Spanner ----------------
 # For the local emulator, set: multiclouddb.connection.emulatorHost=localhost:9010
