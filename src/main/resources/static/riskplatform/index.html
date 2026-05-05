@@ -970,7 +970,7 @@ async function selectPortfolio(portfolioId) {
         <td class="num" style="font-weight:600">${fmtMoney(p.marketValue)}</td>
         <td class="num ${pnlClass(p.unrealizedPnL)}">${fmtMoney(p.unrealizedPnL)}</td>
         <td class="num ${pnlClass(p.pnlPercent)}">${fmtPct(p.pnlPercent)}</td>
-        <td><button class="btn-danger" onclick="deletePosition('${p.positionId}')" title="Delete position" style="padding:2px 6px;font-size:11px;">✕</button></td>
+        <td><button class="btn-danger" onclick="deletePosition('${p.positionId}', '${p.portfolioId}')" title="Delete position" style="padding:2px 6px;font-size:11px;">✕</button></td>
       </tr>
     `).join('');
   } catch (e) {
@@ -1037,7 +1037,7 @@ function renderAlerts(alerts) {
         <div class="alert-message">${a.message}</div>
         <div class="alert-meta">${a.type} · Portfolio: ${a.portfolioId} · ${a.status || 'OPEN'}</div>
       </div>
-      <button class="btn-danger" onclick="deleteAlert('${a.alertId}')" title="Delete alert" style="padding:2px 6px;font-size:11px;flex-shrink:0;">✕</button>
+      <button class="btn-danger" onclick="deleteAlert('${a.alertId}', '${a.portfolioId}')" title="Delete alert" style="padding:2px 6px;font-size:11px;flex-shrink:0;">✕</button>
     </li>
   `).join('');
 }
@@ -1259,10 +1259,10 @@ async function deletePortfolio(portfolioId, event) {
   }
 }
 
-async function deletePosition(positionId) {
+async function deletePosition(positionId, portfolioId) {
   if (!confirm(`Delete position ${positionId}?`)) return;
   try {
-    await deleteJson(`/api/positions/${positionId}?tenant=${currentTenant}`);
+    await deleteJson(`/api/positions/${positionId}?tenant=${currentTenant}&portfolio=${portfolioId}`);
     showToast(`Position deleted`);
     await loadDashboard();
     if (currentPortfolio) selectPortfolio(currentPortfolio);
@@ -1271,9 +1271,9 @@ async function deletePosition(positionId) {
   }
 }
 
-async function deleteAlert(alertId) {
+async function deleteAlert(alertId, portfolioId) {
   try {
-    await deleteJson(`/api/alerts/${alertId}?tenant=${currentTenant}`);
+    await deleteJson(`/api/alerts/${alertId}?tenant=${currentTenant}&portfolio=${portfolioId}`);
     showToast('Alert dismissed');
     await loadDashboard();
   } catch (e) {

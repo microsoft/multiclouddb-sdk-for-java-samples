@@ -21,7 +21,7 @@
              This installs the SDK artifacts into your local ~/.m2 repository.
           3. Then build this project: mvn compile
     </description>
-    <url>https://github.com/allenkim0129/multiclouddb-samples</url>
+    <url>https://github.com/microsoft/multiclouddb-sdk-for-java-samples</url>
 
     <licenses>
         <license>

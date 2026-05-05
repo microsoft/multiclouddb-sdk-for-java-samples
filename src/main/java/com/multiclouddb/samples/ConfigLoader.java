@@ -128,8 +128,11 @@ public final class ConfigLoader {
                 System.out.println("  Config file not found: " + filename
                         + " — using system properties only");
             }
-        } catch (IOException ignored) {
-            // Fall through — properties file is optional
+        } catch (IOException e) {
+            // Properties file is optional, but a malformed file should be visible
+            // to the user rather than silently producing an empty config.
+            System.err.println("  WARN: failed to load config file " + filename
+                    + ": " + e.getMessage());
         }
         return props;
     }
