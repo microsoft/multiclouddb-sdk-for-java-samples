@@ -45,7 +45,7 @@ public final class Models {
         doc.put("industry", industry);
         doc.put("status", "ACTIVE");
         doc.put("createdAt", Instant.now().toString());
-        doc.put("databaseName", tenantId + "-risk-db");
+        doc.put("databaseName", "multiclouddb-sdk-for-java-risk-" + tenantId);
         return doc;
     }
 

@@ -453,7 +453,7 @@ public class RiskPlatformApp {
                 return;
             }
 
-            List<JsonNode> marketData = tenantManager.listAll("_shared", "market_data");
+            List<JsonNode> marketData = tenantManager.listAll("shared", "market_data");
             sendJson(exchange, 200, toArray(marketData));
         } catch (Exception e) {
             sendError(exchange, 500, e.getMessage());
