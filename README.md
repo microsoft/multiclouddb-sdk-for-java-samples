@@ -151,6 +151,8 @@ Runs a writer thread that produces a fixed CREATE / UPDATE / DELETE sequence,
 drains the change feed, then exits. Useful for validating that change feed is
 wired up end-to-end.
 
+**macOS / Linux:**
+
 ```bash
 # Live Cosmos
 mvn package -DskipTests
@@ -163,6 +165,24 @@ java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
      com.multiclouddb.samples.changefeed.ChangeFeedSample
 ```
 
+**Windows (PowerShell):**
+
+> PowerShell mangles unquoted `-D...=...` arguments and does not recognise
+> bash-style `\` line continuation. Quote each `-D` arg and use the backtick
+> (`` ` ``) for continuation, as shown below.
+
+```powershell
+# Live Cosmos
+mvn package -DskipTests
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Cosmos emulator (default)
+java -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
 #### 2. Continuous watcher (`ChangeFeedWatcherSample`)
 
 Long-running consumer with no built-in writes. Start it, then add, edit, or
@@ -171,6 +191,8 @@ delete items in the Azure Portal **Data Explorer** for the
 operation prints a `CREATE` / `UPDATE` / `DELETE` line on the console within
 the poll interval (default 1 second). Press **Ctrl+C** to stop; the watcher
 prints a final event tally.
+
+**macOS / Linux:**
 
 ```bash
 # Live Cosmos
@@ -190,6 +212,26 @@ java -Dchangefeed.poll.intervalMs=500 \
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+# Live Cosmos
+mvn package -DskipTests
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Cosmos emulator (default config)
+java -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Override the poll interval (milliseconds; default 1000)
+java "-Dchangefeed.poll.intervalMs=500" `
+     "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
 #### 3. Extended retention escape hatch (`ChangeFeedExtendedRetentionSample`)
 
 Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts
@@ -200,6 +242,8 @@ providers can be asked for longer-than-24-hour change-feed history before you
 write any cursor-persistence code. See
 [`README-change-feed.md`](README-change-feed.md#extended-retention-escape-hatch)
 for the per-provider breakdown.
+
+**macOS / Linux:**
 
 ```bash
 # Cosmos (live Continuous-Backup account; emulator is rejected)
@@ -215,6 +259,25 @@ java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
 # DynamoDB (should fail fast — expected exit code 1)
 java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Cosmos (live Continuous-Backup account; emulator is rejected)
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+
+# Spanner (should succeed)
+java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+
+# DynamoDB (should fail fast — expected exit code 1)
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 

@@ -263,10 +263,21 @@ java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
 default is **1000 ms**; override via the `changefeed.poll.intervalMs` system
 property (minimum 1 ms):
 
+**macOS / Linux:**
+
 ```bash
 java -Dchangefeed.poll.intervalMs=250 \
      -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+java "-Dchangefeed.poll.intervalMs=250" `
+     "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
@@ -386,6 +397,8 @@ end-to-end on all three providers.
 
 After building the fat jar (`mvn clean package -DskipTests`):
 
+**macOS / Linux:**
+
 ```bash
 # Cosmos — should succeed.
 # Requires a LIVE Continuous-Backup Cosmos account (the emulator does not
@@ -408,6 +421,29 @@ java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
 # in region first.
 java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+```
+
+**Windows (PowerShell):**
+
+> PowerShell mangles unquoted `-D...=...` system-property arguments and does
+> not recognise bash-style `\` line continuation. Quote each `-D` arg and use
+> the backtick (`` ` ``) for continuation, as shown below.
+
+```powershell
+# Cosmos — should succeed.
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+
+# Spanner — should succeed.
+java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+
+# DynamoDB — should fail fast (expected exit code: 1).
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 
@@ -628,6 +664,8 @@ cat src/main/resources/change-feed-cosmos-cloud.properties
 `ConfigLoader` reads configs from the **fat-jar classpath**, so the runtime
 file must live under `src/main/resources/` **before** you run `mvn package`.
 
+**macOS / Linux:**
+
 ```bash
 mvn package -DskipTests
 
@@ -639,6 +677,22 @@ java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
 # Continuous watcher
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn package -DskipTests
+
+# One-shot demo
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
