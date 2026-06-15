@@ -281,6 +281,14 @@ java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 
+**Spanner emulator / DynamoDB Local** — `ChangeFeedExtendedRetentionSample`
+works against the local emulators too, because the build-time gate runs
+before any wire I/O. The shipped `change-feed-spanner.properties` and
+`change-feed-dynamo.properties` configs are wired for the standard emulator
+endpoints (`localhost:9010` and `http://localhost:8000` respectively); see
+[`README-change-feed.md`](README-change-feed.md#emulator-setup) for the
+`docker run` commands and the full per-shell run table.
+
 Example output (after creating, then deleting an item in the portal):
 
 ```
@@ -313,8 +321,12 @@ Press Ctrl+C to stop.
 | `risk-platform-dynamo.properties` | DynamoDB Local |
 | `risk-platform-cosmos-cloud.properties.template` | Cosmos DB (cloud) |
 | `risk-platform-dynamo-cloud.properties.template` | DynamoDB (cloud) |
-| `change-feed-cosmos.properties` | Cosmos DB emulator (used by both change-feed samples) |
+| `change-feed-cosmos.properties` | Cosmos DB emulator (data-plane samples + extended-retention build-time gate) |
 | `change-feed-cosmos-cloud.properties.template` | Cosmos DB (cloud) — copy to `src/main/resources/change-feed-cosmos-cloud.properties` (gitignored), then fill in endpoint + key |
+| `change-feed-spanner.properties` | Google Cloud Spanner emulator (extended-retention build-time gate demo) |
+| `change-feed-spanner-cloud.properties.template` | Google Cloud Spanner (cloud) — copy to `change-feed-spanner-cloud.properties` (gitignored), then fill in project + instance + database |
+| `change-feed-dynamo.properties` | Amazon DynamoDB Local (extended-retention build-time gate demo — gate refuses before any wire I/O) |
+| `change-feed-dynamo-cloud.properties.template` | Amazon DynamoDB (cloud) — copy to `change-feed-dynamo-cloud.properties` (gitignored), then fill in region |
 
 ---
 
