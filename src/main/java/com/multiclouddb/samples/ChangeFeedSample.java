@@ -3,12 +3,8 @@
 
 package com.multiclouddb.samples;
 
-import com.azure.cosmos.CosmosClient;
-import com.azure.cosmos.CosmosClientBuilder;
-import com.azure.cosmos.ConsistencyLevel;
-import com.azure.cosmos.GatewayConnectionConfig;
-import com.azure.cosmos.models.ChangeFeedPolicy;
-import com.azure.cosmos.models.CosmosContainerProperties;
+import com.multiclouddb.api.Capability;
+import com.multiclouddb.api.CapabilitySet;
 import com.multiclouddb.api.MulticloudDbClient;
 import com.multiclouddb.api.MulticloudDbClientFactory;
 import com.multiclouddb.api.MulticloudDbKey;
@@ -18,7 +14,6 @@ import com.multiclouddb.api.changefeed.ChangeEvent;
 import com.multiclouddb.api.changefeed.ChangeFeedCursor;
 import com.multiclouddb.api.changefeed.ChangeFeedPage;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +32,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *        com.multiclouddb.samples.ChangeFeedSample
  *
  *   # Live Cosmos account (master-key auth)
- *   #   1. cp change-feed-cosmos-cloud.properties.template \
- *   #         change-feed-cosmos-cloud.properties   (then fill in endpoint+key)
+ *   #   1. cp src/main/resources/change-feed-cosmos-cloud.properties.template \
+ *   #         src/main/resources/change-feed-cosmos-cloud.properties
+ *   #      (then fill in endpoint+key — the runtime file must live under
+ *   #       src/main/resources/ so it ends up on the fat-jar classpath; the
+ *   #       runtime file is gitignored)
  *   #   2. mvn clean package -DskipTests
  *   java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
@@ -86,8 +84,8 @@ public class ChangeFeedSample {
 
         System.out.println("=== Multicloud DB Change Feed Sample ===");
         System.out.println("Provider: " + provider.displayName());
-        boolean isCosmos = provider.id().equals("cosmos");
-        boolean isCosmosEmulator = isCosmos && isLocalEndpoint(
+        boolean isCosmos = ProviderId.COSMOS.equals(provider);
+        boolean isCosmosEmulator = isCosmos && ChangeFeedSampleSupport.isLocalEndpoint(
                 appConfig.sdk().connection().get("endpoint"));
         if (isCosmos) {
             System.out.println("Mode    : " + (isCosmosEmulator ? "EMULATOR" : "LIVE"));
@@ -104,10 +102,21 @@ public class ChangeFeedSample {
         // creates a plain container and AVAD is available automatically (see
         // sample javadoc).
         if (isCosmosEmulator) {
-            provisionCosmosAvadContainer(appConfig, database, collection);
+            ChangeFeedSampleSupport.provisionCosmosAvadContainer(appConfig, database, collection);
         }
 
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk())) {
+
+            // Bail out early if the active provider doesn't support change
+            // feed (Capability.CHANGE_FEED is gated to Cosmos in the SDK).
+            // This is the portable way to detect a Capability-gated feature.
+            CapabilitySet caps = client.capabilities();
+            if (!caps.isSupported(Capability.CHANGE_FEED)) {
+                System.err.println("Change feed is not supported on "
+                        + provider.displayName()
+                        + ". Use a Cosmos config (e.g. change-feed-cosmos.properties).");
+                return;
+            }
 
             // === 1. Provision schema ===
             // On a live Continuous-Backup account this creates a plain
@@ -124,6 +133,12 @@ public class ChangeFeedSample {
             System.out.println("--- listCursors (live tip) ---");
             List<ChangeFeedCursor> cursors = client.listCursors(address);
             System.out.println("  Discovered " + cursors.size() + " partition cursor(s)");
+            if (cursors.isEmpty()) {
+                System.err.println("  No partition cursors returned. The container exists but the "
+                        + "provider did not report any feed ranges — likely a configuration or "
+                        + "change-feed-mode mismatch. Aborting sample.");
+                return;
+            }
             System.out.println();
 
             // === 3. Spawn a writer thread that produces CREATE/UPDATE/DELETE events ===
@@ -143,14 +158,19 @@ public class ChangeFeedSample {
 
             // === 5. Cursor-token round-trip: persist + resume ===
             System.out.println("--- Cursor token round-trip ---");
-            ChangeFeedCursor liveTip = client.listCursors(address).get(0);
-            String token = liveTip.toToken();
-            System.out.println("  Persisted token (truncated): " + token.substring(0, Math.min(60, token.length())) + "...");
-            ChangeFeedCursor resumed = ChangeFeedCursor.fromToken(token);
-            ChangeFeedPage page = client.readChanges(address, resumed);
-            System.out.println("  Resumed cursor read " + page.events().size()
-                    + " event(s); hasMore=" + page.hasMore()
-                    + ", terminal=" + page.isTerminal());
+            List<ChangeFeedCursor> tipCursors = client.listCursors(address);
+            if (tipCursors.isEmpty()) {
+                System.err.println("  No partition cursors returned; skipping token round-trip.");
+            } else {
+                ChangeFeedCursor liveTip = tipCursors.get(0);
+                String token = liveTip.toToken();
+                System.out.println("  Persisted token (truncated): " + token.substring(0, Math.min(60, token.length())) + "...");
+                ChangeFeedCursor resumed = ChangeFeedCursor.fromToken(token);
+                ChangeFeedPage page = client.readChanges(address, resumed);
+                System.out.println("  Resumed cursor read " + page.events().size()
+                        + " event(s); hasMore=" + page.hasMore()
+                        + ", terminal=" + page.isTerminal());
+            }
 
             System.out.println();
             System.out.println("=== Sample complete ===");
@@ -183,8 +203,10 @@ public class ChangeFeedSample {
             System.out.println("  [writer] update cf-1");
             Thread.sleep(200);
 
-            // One DELETE to demonstrate DELETE events. On Cosmos, this surfaces
-            // only because the container was provisioned with AVAD above.
+            // One DELETE to demonstrate the DELETE event type. DELETE events
+            // require AVAD on Cosmos, which is enabled here either by the
+            // emulator pre-provisioning above (Cosmos emulator path) or
+            // implicitly via Continuous Backup (live Cosmos path).
             client.delete(address, first);
             System.out.println("  [writer] delete cf-1");
         } catch (InterruptedException ie) {
@@ -227,44 +249,5 @@ public class ChangeFeedSample {
         }
         System.out.println("  [consumer] hit 30s safety deadline");
         return total;
-    }
-
-    // ── Helper: detect emulator endpoints (localhost / 127.0.0.1) ───────────
-    private static boolean isLocalEndpoint(String endpoint) {
-        if (endpoint == null) return false;
-        String lower = endpoint.toLowerCase();
-        return lower.contains("localhost") || lower.contains("127.0.0.1");
-    }
-
-    // ── Helper: pre-provision Cosmos AVAD container directly (emulator) ─────
-    //
-    // The Cosmos emulator does not support Continuous Backup, so AVAD must be
-    // configured explicitly via ChangeFeedPolicy.createAllVersionsAndDeletesPolicy.
-    // The emulator caps AVAD retention at 10 minutes.
-    private static void provisionCosmosAvadContainer(ConfigLoader.AppConfig appConfig,
-                                                     String database,
-                                                     String collection) {
-        String endpoint = appConfig.sdk().connection().get("endpoint");
-        String key = appConfig.sdk().connection().get("key");
-        String mode = appConfig.sdk().connection().getOrDefault("connectionMode", "gateway");
-
-        CosmosClientBuilder builder = new CosmosClientBuilder()
-                .endpoint(endpoint)
-                .key(key)
-                .consistencyLevel(ConsistencyLevel.SESSION);
-        if ("gateway".equalsIgnoreCase(mode)) {
-            builder.gatewayMode(new GatewayConnectionConfig());
-        }
-
-        try (CosmosClient cosmos = builder.buildClient()) {
-            cosmos.createDatabaseIfNotExists(database);
-            CosmosContainerProperties props = new CosmosContainerProperties(collection, "/partitionKey");
-            // 10 minutes — the emulator's hard ceiling for AVAD retention.
-            props.setChangeFeedPolicy(
-                    ChangeFeedPolicy.createAllVersionsAndDeletesPolicy(Duration.ofMinutes(10)));
-            cosmos.getDatabase(database).createContainerIfNotExists(props);
-            System.out.println("  [provision] AVAD container '" + database + "/" + collection
-                    + "' ready (emulator retention=10min)");
-        }
     }
 }

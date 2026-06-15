@@ -273,22 +273,22 @@ Mode    : LIVE
   Discovered 1 partition cursor(s)
 
 --- readChanges (consuming events) ---
-  [writer] upsert cf-0
   [writer] upsert cf-1
   [writer] upsert cf-2
   [writer] upsert cf-3
   [writer] upsert cf-4
   [writer] upsert cf-5
+  [writer] upsert cf-6
   [writer] update cf-1
   [writer] delete cf-1
-  [consumer] CREATE  cf-0 / cf-0
-  [consumer] CREATE  cf-1 / cf-1
-  [consumer] CREATE  cf-2 / cf-2
-  [consumer] CREATE  cf-3 / cf-3
-  [consumer] CREATE  cf-4 / cf-4
-  [consumer] CREATE  cf-5 / cf-5
-  [consumer] UPDATE  cf-1 / cf-1
-  [consumer] DELETE  cf-1 / cf-1
+  [consumer] CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
+  [consumer] CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
+  [consumer] CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
+  [consumer] CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
+  [consumer] CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
+  [consumer] UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
 
   Total events observed: 8
 

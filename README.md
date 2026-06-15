@@ -122,6 +122,23 @@ DB account. Both use the dedicated database
   container with an AVAD `ChangeFeedPolicy` and a 10-minute retention (the
   emulator's hard ceiling) on first run.
 
+**First-time setup for live Cosmos (one-time per checkout):**
+
+The `change-feed-cosmos-cloud.properties` file is gitignored; only the
+`.template` ships with the repo. `ConfigLoader` reads configs from the
+fat-jar classpath, so the runtime file must live under
+`src/main/resources/` *before* you run `mvn package`:
+
+```bash
+cp src/main/resources/change-feed-cosmos-cloud.properties.template \
+   src/main/resources/change-feed-cosmos-cloud.properties
+# edit src/main/resources/change-feed-cosmos-cloud.properties to fill in endpoint + key
+mvn package -DskipTests
+```
+
+After this one-time copy you can re-use the resulting fat jar for both
+change-feed samples below.
+
 #### 1. One-shot change feed demo (`ChangeFeedSample`)
 
 Runs a writer thread that produces a fixed CREATE / UPDATE / DELETE sequence,
@@ -200,7 +217,7 @@ Press Ctrl+C to stop.
 | `risk-platform-cosmos-cloud.properties.template` | Cosmos DB (cloud) |
 | `risk-platform-dynamo-cloud.properties.template` | DynamoDB (cloud) |
 | `change-feed-cosmos.properties` | Cosmos DB emulator (used by both change-feed samples) |
-| `change-feed-cosmos-cloud.properties` | Cosmos DB (cloud) — fill in endpoint + key |
+| `change-feed-cosmos-cloud.properties.template` | Cosmos DB (cloud) — copy to `src/main/resources/change-feed-cosmos-cloud.properties` (gitignored), then fill in endpoint + key |
 
 ---
 
