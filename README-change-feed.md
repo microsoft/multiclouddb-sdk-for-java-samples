@@ -227,24 +227,35 @@ create an instance and database first.
 
 ### DynamoDB Local
 
-DynamoDB Local is a downloadable version of DynamoDB you can run on your
-machine. `ChangeFeedExtendedRetentionSample` connects to it through the
-standard `endpoint` knob.
+`ChangeFeedExtendedRetentionSample` against DynamoDB **refuses to build the
+client at all** — the build-time capability gate fails with
+`UNSUPPORTED_CAPABILITY(extended_retention_unavailable)` before any wire I/O
+is issued. The endpoint is never contacted, so **you do not need to start
+DynamoDB Local** (or have Docker installed at all) for the build-time-gate
+demo. Just run the sample against the shipped `change-feed-dynamo.properties`
+config and you will see the expected `exit 1` refusal.
 
-#### 1. Start DynamoDB Local
+If you do want a running DynamoDB Local endpoint (for example, to extend the
+sample later to issue real reads / writes):
+
+#### 1. Start DynamoDB Local (optional)
 
 ```bash
 docker run --rm -p 8000:8000 amazon/dynamodb-local
 ```
 
+> **No Docker?** Either install [Docker Desktop for
+> Windows](https://docs.docker.com/desktop/install/windows-install/) or
+> [Podman](https://podman.io/), or download the standalone DynamoDB Local
+> tarball from the [AWS docs](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html)
+> and run `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb`.
+> Again, **none of this is required for the build-time gate demo**.
+
 #### 2. No table creation required
 
-`ChangeFeedExtendedRetentionSample` against DynamoDB **refuses to build the
-client at all** — the build-time capability gate fails with
-`UNSUPPORTED_CAPABILITY(extended_retention_unavailable)` before any wire I/O
-is issued. You can in fact run the sample against the shipped
-`change-feed-dynamo.properties` config without starting DynamoDB Local; the
-endpoint is never contacted.
+The sample never issues any DynamoDB API call — it stops at the SDK's
+build-time capability gate. So even if you do start DynamoDB Local, you
+don't need to create a table for the gate demo.
 
 #### 3. Emulator connection details (already in `change-feed-dynamo.properties`)
 
@@ -559,6 +570,9 @@ java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
 
 # --- DynamoDB --------------------------------------------------------------
 # DynamoDB Local — should fail fast (expected exit code: 1).
+# No Docker / no DynamoDB Local container needed — the build-time gate
+# refuses extended retention before any wire I/O. Uses shipped
+# change-feed-dynamo.properties.
 java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
