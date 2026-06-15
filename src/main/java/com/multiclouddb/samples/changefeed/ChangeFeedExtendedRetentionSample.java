@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-package com.multiclouddb.samples;
+package com.multiclouddb.samples.changefeed;
+
+import com.multiclouddb.samples.ConfigLoader;
 
 import com.multiclouddb.api.Capability;
 import com.multiclouddb.api.CapabilitySet;
@@ -79,17 +81,17 @@ import java.util.Map;
  * <pre>
  *   # Default: Cosmos (live, Continuous-Backup account)
  *   java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
  *
  *   # Spanner (should succeed)
  *   java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
  *
  *   # DynamoDB (should fail fast with UNSUPPORTED_CAPABILITY)
  *   java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
  * </pre>
  */
 public class ChangeFeedExtendedRetentionSample {

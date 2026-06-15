@@ -32,7 +32,7 @@
 #  Then run:
 #    java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
 #         -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-#         com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+#         com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 #  Expected exit code: 1 (UNSUPPORTED_CAPABILITY surfaced from the SDK).
 # ---------------------------------------------------------------------------
 

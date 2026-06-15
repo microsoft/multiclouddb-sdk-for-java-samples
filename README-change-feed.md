@@ -18,6 +18,13 @@ The first two samples target the dedicated database/container
 `multiclouddb.database` / `multiclouddb.collection`) so they don't collide with
 the Todo App or Risk Platform samples.
 
+> **Package layout.** All three samples live under
+> `src/main/java/com/multiclouddb/samples/changefeed/` and are in the
+> `com.multiclouddb.samples.changefeed` Java package (mirroring the
+> per-sample layout used by `todo/` and `riskplatform/`). Configuration
+> templates stay at the resources root (`src/main/resources/change-feed-*.properties[.template]`)
+> because `ConfigLoader` reads them by classpath name.
+
 > **Provider scope:** `ChangeFeedSample` and `ChangeFeedWatcherSample` ship
 > Cosmos provider configs because the Multicloud DB SDK's `ChangeFeedReader`
 > data-plane API is currently exercised against Cosmos in this repo.
@@ -193,14 +200,14 @@ is loaded automatically when no `-Dmulticlouddb.config` is supplied.
 
 ```bash
 java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedSample
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 ```
 
 **Continuous watcher:**
 
 ```bash
 java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 Then open <https://localhost:8081/_explorer/index.html>, navigate to the
@@ -226,12 +233,12 @@ mvn package -DskipTests
 # One-shot demo
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedSample
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 
 # Continuous watcher
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 **Windows (PowerShell):**
@@ -242,12 +249,12 @@ mvn package -DskipTests
 # One-shot demo
 java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.ChangeFeedSample
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 
 # Continuous watcher
 java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 ### Tuning the watcher poll interval
@@ -260,7 +267,7 @@ property (minimum 1 ms):
 java -Dchangefeed.poll.intervalMs=250 \
      -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 > Invalid values (non-numeric, ≤ 0) print a warning to stderr and fall back to
@@ -387,21 +394,21 @@ After building the fat jar (`mvn clean package -DskipTests`):
 # in endpoint + key first.
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 
 # Spanner — should succeed.
 # Copy change-feed-spanner-cloud.properties.template to *.properties and fill
 # in project + instance + database first.
 java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 
 # DynamoDB — should fail fast (expected exit code: 1).
 # Copy change-feed-dynamo-cloud.properties.template to *.properties and fill
 # in region first.
 java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 
 <a id="example-output-changefeedextendedretentionsample"></a>
@@ -627,12 +634,12 @@ mvn package -DskipTests
 # One-shot demo
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedSample
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 
 # Continuous watcher
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 ### Step 4 — Clean up Cosmos DB resources (optional)

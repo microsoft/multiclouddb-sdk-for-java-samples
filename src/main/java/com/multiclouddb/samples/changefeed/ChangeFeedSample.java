@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-package com.multiclouddb.samples;
+package com.multiclouddb.samples.changefeed;
+
+import com.multiclouddb.samples.ConfigLoader;
 
 import com.multiclouddb.api.Capability;
 import com.multiclouddb.api.CapabilitySet;
@@ -29,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <pre>
  *   # Default: Cosmos DB emulator (uses change-feed-cosmos.properties)
  *   java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedSample
  *
  *   # Live Cosmos account (master-key auth)
  *   #   1. cp src/main/resources/change-feed-cosmos-cloud.properties.template \
@@ -40,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   #   2. mvn clean package -DskipTests
  *   java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedSample
  * </pre>
  *
  * <h3>Provisioning</h3>

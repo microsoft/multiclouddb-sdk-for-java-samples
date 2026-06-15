@@ -106,10 +106,16 @@ mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.todo.TodoApp \
 
 ### Change Feed Samples
 
-Two samples demonstrate the SDK's pull-mode change feed against an Azure Cosmos
-DB account. Both use the dedicated database
+Three samples demonstrate the SDK's pull-mode change feed. The two data-plane
+samples target Azure Cosmos DB and use the dedicated database
 `multiclouddb-sdk-for-java-changefeed` and container `change-feed-demo` (see
-`src/main/resources/change-feed-cosmos*.properties`).
+`src/main/resources/change-feed-cosmos*.properties`). The third is a portable
+build-time gate demo and additionally accepts Spanner and DynamoDB configs.
+
+> The change-feed sample sources live under
+> `src/main/java/com/multiclouddb/samples/changefeed/` and are in the
+> `com.multiclouddb.samples.changefeed` package — see
+> [`README-change-feed.md`](README-change-feed.md) for the deep dive.
 
 **Provisioning notes:**
 
@@ -150,11 +156,11 @@ wired up end-to-end.
 mvn package -DskipTests
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedSample
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 
 # Cosmos emulator (default)
 java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedSample
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 ```
 
 #### 2. Continuous watcher (`ChangeFeedWatcherSample`)
@@ -171,17 +177,45 @@ prints a final event tally.
 mvn package -DskipTests
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 
 # Cosmos emulator (default config)
 java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 
 # Override the poll interval (milliseconds; default 1000)
 java -Dchangefeed.poll.intervalMs=500 \
      -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.ChangeFeedWatcherSample
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+#### 3. Extended retention escape hatch (`ChangeFeedExtendedRetentionSample`)
+
+Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts
+to build a client. Succeeds on Cosmos and Spanner (which declare
+`Capability.EXTENDED_CHANGE_FEED_HISTORY`); fails fast on DynamoDB with
+`UNSUPPORTED_CAPABILITY` before any network I/O. Use this to verify which
+providers can be asked for longer-than-24-hour change-feed history before you
+write any cursor-persistence code. See
+[`README-change-feed.md`](README-change-feed.md#extended-retention-escape-hatch)
+for the per-provider breakdown.
+
+```bash
+# Cosmos (live Continuous-Backup account; emulator is rejected)
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+
+# Spanner (should succeed)
+java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+
+# DynamoDB (should fail fast — expected exit code 1)
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 
 Example output (after creating, then deleting an item in the portal):

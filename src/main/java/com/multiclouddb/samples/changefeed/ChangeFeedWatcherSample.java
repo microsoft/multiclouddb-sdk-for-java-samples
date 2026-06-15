@@ -1,7 +1,9 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-package com.multiclouddb.samples;
+package com.multiclouddb.samples.changefeed;
+
+import com.multiclouddb.samples.ConfigLoader;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.multiclouddb.api.Capability;
@@ -37,17 +39,17 @@ import java.util.concurrent.atomic.AtomicLong;
  *   # the fat-jar classpath)
  *   java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedWatcherSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
  *
  *   # Local Cosmos emulator (default)
  *   java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedWatcherSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
  *
  *   # Tune the poll interval (milliseconds; default 1000, minimum 1)
  *   java -Dchangefeed.poll.intervalMs=500 \
  *        -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.ChangeFeedWatcherSample
+ *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
  * </pre>
  *
  * <h3>Try it</h3>
