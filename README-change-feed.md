@@ -1,25 +1,31 @@
 # Multicloud DB SDK — Change Feed Samples
 
-Two command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
-change feed** against Azure Cosmos DB. Both samples consume the **All-Versions-
-and-Deletes (AVAD)** change feed, so they observe `CREATE`, `UPDATE`, **and**
-`DELETE` events — not just the latest version per document.
+Three command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
+change feed**. The first two consume the **All-Versions-and-Deletes (AVAD)**
+change feed against Azure Cosmos DB so they observe `CREATE`, `UPDATE`, **and**
+`DELETE` events — not just the latest version per document. The third targets
+all three providers and demonstrates the SDK's **build-time capability gate**
+for the extended-retention escape hatch.
 
 | Sample | Behavior | Use it for |
 |--------|----------|------------|
 | **`ChangeFeedSample`** | One-shot demo: writer thread produces a fixed `CREATE` / `UPDATE` / `DELETE` sequence; consumer drains the feed; both exit. | Validating that change feed is wired up end-to-end. |
 | **`ChangeFeedWatcherSample`** | Long-running consumer with **no writes of its own**. Polls the change feed and prints each event as it arrives. `Ctrl+C` → final tally. | Observing changes you make manually in the Azure Portal Data Explorer (or any other writer). |
+| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos and Spanner (which declare `Capability.EXTENDED_CHANGE_FEED_HISTORY`); fails fast on DynamoDB with `UNSUPPORTED_CAPABILITY`. | Verifying which providers can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
 
-Both samples target the dedicated database/container
+The first two samples target the dedicated database/container
 `multiclouddb-sdk-for-java-changefeed/change-feed-demo` (configurable via
 `multiclouddb.database` / `multiclouddb.collection`) so they don't collide with
 the Todo App or Risk Platform samples.
 
-> **Provider scope:** This sample only ships a Cosmos provider config because
-> the Multicloud DB SDK's `ChangeFeedReader` API is currently exercised against
-> Cosmos in this repo. The portable API itself is provider-agnostic; once other
-> providers grow change-feed support, the same sample code can target them by
-> swapping the `.properties` file.
+> **Provider scope:** `ChangeFeedSample` and `ChangeFeedWatcherSample` ship
+> Cosmos provider configs because the Multicloud DB SDK's `ChangeFeedReader`
+> data-plane API is currently exercised against Cosmos in this repo.
+> `ChangeFeedExtendedRetentionSample` additionally ships Spanner and DynamoDB
+> templates so the build-time capability gate can be demoed on every provider.
+> The portable API itself is provider-agnostic; once other providers grow
+> change-feed data-plane support, the existing data-plane samples can target
+> them by swapping the `.properties` file.
 
 ---
 
@@ -36,13 +42,17 @@ the Todo App or Risk Platform samples.
 5. [Example Output](#example-output)
    - [`ChangeFeedSample` (one-shot)](#changefeedsample-one-shot)
    - [`ChangeFeedWatcherSample` (continuous)](#changefeedwatchersample-continuous)
-6. [Configuration Reference](#configuration-reference)
-7. [Cloud Setup](#cloud-setup)
+6. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
+   - [Per-provider behaviour](#per-provider-behaviour)
+   - [Running `ChangeFeedExtendedRetentionSample`](#running-changefeedextendedretentionsample)
+   - [Example output](#example-output-changefeedextendedretentionsample)
+7. [Configuration Reference](#configuration-reference)
+8. [Cloud Setup](#cloud-setup)
    - [Step 1 — Create a Continuous-Backup Cosmos account](#step-1--create-a-continuous-backup-cosmos-account)
    - [Step 2 — Create the properties file](#step-2--create-the-properties-file)
    - [Step 3 — Build and run](#step-3--build-and-run)
    - [Step 4 — Clean up Cosmos DB resources](#step-4--clean-up-cosmos-db-resources-optional)
-8. [Troubleshooting](#troubleshooting)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -328,9 +338,128 @@ Total events observed: 3
 
 ---
 
+## Extended Retention Escape Hatch
+
+The portable change-feed baseline is **24 hours**: the SDK treats every cursor
+token older than that as expired, regardless of what the underlying provider
+stores server-side. Many real workloads want longer history — disaster
+recovery, late-arriving subscribers, weekend backfills. The SDK exposes an
+opt-in for this via `ChangeFeedConfig.extendedRetention(Duration)`, wired into
+the client via `MulticloudDbClientConfig.Builder#changeFeed(...)`.
+
+Opting in is a **portable contract, not a guarantee**: providers that cannot
+extend retention beyond 24h refuse to be instantiated at all. The refusal is
+synchronous and happens in `MulticloudDbClientFactory.create(...)` —
+**before any network I/O** — surfaced as
+`MulticloudDbErrorCategory.UNSUPPORTED_CAPABILITY` with
+`providerDetails.reason = "extended_retention_unavailable"`. Misconfiguration
+cannot lurk until the first `listCursors` / `readChanges` call.
+
+`ChangeFeedExtendedRetentionSample` demonstrates this build-time gate
+end-to-end on all three providers.
+
+### Per-provider behaviour
+
+| Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
+|----------|---------------------------------------------|--------------------------|
+| **Azure Cosmos DB** | Supported | `Client built successfully — capability gate passed.` Notes: *"Up to 30 days via Continuous Backup 30d tier; 7d minimum (AVAD requires Continuous Backup)."* |
+| **Google Cloud Spanner** | Supported | `Client built successfully — capability gate passed.` Notes: *"Default 24h; configurable up to 7d natively via `CREATE CHANGE STREAM ... OPTIONS(retention_period=...)`."* |
+| **AWS DynamoDB** | **Not supported** | Sample exits with code `1` and prints `Build-time gate REFUSED extended retention`. DynamoDB Streams is fixed at 24h server-side; an SDK-managed archive-on-read mechanism is on the v1.x roadmap. |
+
+> **Scope of this sample.** The sample stops at the build-time gate on purpose.
+> Actually reading change events beyond the 24-hour baseline requires
+> provider-specific substrate setup that is out of scope for a portable demo
+> — see the [`Why not extendedRetention against live Cosmos?`](#provisioning-model--why-continuous-backup-matters)
+> note above for the Cosmos caveat and the
+> [SDK guide](https://learn.microsoft.com/) for Spanner change-stream DDL.
+> The plain `ChangeFeedSample` and `ChangeFeedWatcherSample` cover the
+> data-plane round-trip at the portable 24-hour baseline.
+
+### Running `ChangeFeedExtendedRetentionSample`
+
+After building the fat jar (`mvn clean package -DskipTests`):
+
+```bash
+# Cosmos — should succeed.
+# Requires a LIVE Continuous-Backup Cosmos account (the emulator does not
+# support CB; the sample detects localhost endpoints and bails out early).
+# Copy change-feed-cosmos-cloud.properties.template to *.properties and fill
+# in endpoint + key first.
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+
+# Spanner — should succeed.
+# Copy change-feed-spanner-cloud.properties.template to *.properties and fill
+# in project + instance + database first.
+java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+
+# DynamoDB — should fail fast (expected exit code: 1).
+# Copy change-feed-dynamo-cloud.properties.template to *.properties and fill
+# in region first.
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+```
+
+<a id="example-output-changefeedextendedretentionsample"></a>
+
+### Example output
+
+**Cosmos (success):**
+
+```
+=== Multicloud DB Change Feed — Extended Retention Sample ===
+Provider          : Azure Cosmos DB
+Requested window  : PT168H (baseline is 24h)
+
+--- Building client with extendedRetention(PT168H) ---
+  Client built successfully — capability gate passed.
+
+--- Capability detail ---
+  Name      : extended_change_feed_history
+  Supported : true
+  Notes     : Up to 30 days via Continuous Backup 30d tier; 7d minimum (AVAD requires Continuous Backup)
+
+Extended retention is honoured by the SDK on this provider. Cursor tokens
+issued under this client carry the opt-in stamp and can be resumed beyond
+24h, up to the requested window.
+
+Data-plane round-trip (listCursors / readChanges) requires provider-specific
+substrate setup and is out of scope for this sample — see ChangeFeedSample /
+ChangeFeedWatcherSample for the 24h-baseline data-plane demo.
+
+=== Sample complete ===
+```
+
+**DynamoDB (refused, exit code 1):**
+
+```
+=== Multicloud DB Change Feed — Extended Retention Sample ===
+Provider          : AWS DynamoDB
+Requested window  : PT168H (baseline is 24h)
+
+--- Building client with extendedRetention(PT168H) ---
+
+--- Build-time gate REFUSED extended retention ---
+  Provider : AWS DynamoDB
+  Category : UNSUPPORTED_CAPABILITY
+  Message  : Provider dynamo does not support Capability.EXTENDED_CHANGE_FEED_HISTORY — extended change-feed retention (requested PT168H) is unavailable on this provider. ...
+  Details  : {reason=extended_retention_unavailable, capability=extended_change_feed_history, requestedRetention=PT168H}
+
+This is the expected outcome on providers that do not declare
+Capability.EXTENDED_CHANGE_FEED_HISTORY (e.g. AWS DynamoDB, whose Streams
+retention is fixed at 24h server-side).
+```
+
+---
+
 ## Configuration Reference
 
-Both samples read the same set of keys from the properties file pointed to by
+Both data-plane samples (`ChangeFeedSample`, `ChangeFeedWatcherSample`) read
+the same set of keys from the properties file pointed to by
 `-Dmulticlouddb.config` (defaults to `change-feed-cosmos.properties`):
 
 | Key | Required? | Default | Notes |
@@ -342,11 +471,17 @@ Both samples read the same set of keys from the properties file pointed to by
 | `multiclouddb.database` | no | `multiclouddb-sdk-for-java-changefeed` | Logical database name. |
 | `multiclouddb.collection` | no | `change-feed-demo` | Container name. |
 
+`ChangeFeedExtendedRetentionSample` accepts `multiclouddb.provider=cosmos`,
+`spanner`, or `dynamo`. The Spanner config additionally requires
+`multiclouddb.connection.projectId`, `instanceId`, and `databaseId`; the
+DynamoDB config requires `multiclouddb.connection.region`. See each provider's
+`change-feed-<provider>-cloud.properties.template` for the full key list.
+
 System properties (passed via `-D` on the `java` command line):
 
 | Property | Sample | Default | Notes |
 |----------|--------|---------|-------|
-| `multiclouddb.config` | both | `change-feed-cosmos.properties` | Classpath name of the properties file. |
+| `multiclouddb.config` | all | `change-feed-cosmos.properties` (data-plane samples) / `change-feed-cosmos-cloud.properties` (`ChangeFeedExtendedRetentionSample`) | Classpath name of the properties file. |
 | `changefeed.poll.intervalMs` | `ChangeFeedWatcherSample` | `1000` | Polling cadence in milliseconds (minimum `1`). |
 
 Shipped properties files:
@@ -356,6 +491,10 @@ Shipped properties files:
 | `src/main/resources/change-feed-cosmos.properties` | Cosmos emulator | yes |
 | `src/main/resources/change-feed-cosmos-cloud.properties.template` | Cosmos cloud (template — copy and fill in) | yes |
 | `src/main/resources/change-feed-cosmos-cloud.properties` | Cosmos cloud (your real endpoint + key) | **no** (gitignored — see [`.gitignore`](.gitignore)) |
+| `src/main/resources/change-feed-spanner-cloud.properties.template` | Spanner cloud (template — copy and fill in) | yes |
+| `src/main/resources/change-feed-spanner-cloud.properties` | Spanner cloud (your real project + instance + database) | **no** (gitignored) |
+| `src/main/resources/change-feed-dynamo-cloud.properties.template` | DynamoDB cloud (template — copy and fill in) | yes |
+| `src/main/resources/change-feed-dynamo-cloud.properties` | DynamoDB cloud (your real region) | **no** (gitignored) |
 
 ---
 

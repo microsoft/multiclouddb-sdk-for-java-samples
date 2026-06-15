@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+#  Change Feed Sample — Amazon DynamoDB (AWS Cloud)
+# ---------------------------------------------------------------------------
+#
+#  This template is used by ChangeFeedExtendedRetentionSample to demonstrate
+#  the SDK's build-time capability gate REFUSING extended retention on a
+#  provider that does NOT declare Capability.EXTENDED_CHANGE_FEED_HISTORY.
+#
+#  DynamoDB Streams is fixed at 24 hours server-side; there is no native
+#  knob to extend it. The SDK therefore fails fast in
+#  MulticloudDbClientFactory.create(...) with
+#  MulticloudDbErrorCategory.UNSUPPORTED_CAPABILITY (reason
+#  "extended_retention_unavailable") BEFORE any network I/O is issued.
+#  An SDK-managed archive-on-read mechanism is on the v1.x roadmap.
+#
+#  -- HOW TO USE -------------------------------------------------------------
+#  Option 1 (recommended) -- let AWS CLI fill in the values automatically:
+#
+#    export AWS_REGION="$(aws configure get region)"
+#    cat > src/main/resources/change-feed-dynamo-cloud.properties << EOF
+#    multiclouddb.provider=dynamo
+#    multiclouddb.connection.region=$AWS_REGION
+#    EOF
+#
+#  Option 2 -- fill in manually:
+#  1. Copy this file and remove the .template extension:
+#       cp src/main/resources/change-feed-dynamo-cloud.properties.template \
+#          src/main/resources/change-feed-dynamo-cloud.properties
+#  2. Fill in YOUR values below (marked with <...>)
+#  3. The *.properties file is git-ignored — it will never be committed.
+#
+#  Then run:
+#    java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+#         -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+#         com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+#  Expected exit code: 1 (UNSUPPORTED_CAPABILITY surfaced from the SDK).
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=dynamo
+
+# --- Application Settings ---------------------------------------------------
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+
+# --- Amazon DynamoDB (AWS Cloud) --------------------------------------------
+# AWS region where your DynamoDB table lives
+# Run: aws configure get region
+multiclouddb.connection.region=<YOUR-AWS-REGION>
+
+# -- No endpoint configured -------------------------------------------------
+# Leave absent to connect to the real AWS DynamoDB service.
+# For DynamoDB Local, set: multiclouddb.connection.endpoint=http://localhost:8000
+# multiclouddb.connection.endpoint=
+
+# -- No credentials needed in this file ------------------------------------
+# The SDK uses the default AWS credential provider chain automatically:
+#   1. Environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN)
+#   2. Java system properties (aws.accessKeyId / aws.secretAccessKey)
+#   3. AWS shared credentials file (~/.aws/credentials via aws configure)
+#   4. AWS IAM role for EC2 / ECS task role / Lambda execution role
+#   5. AWS SSO (aws sso login)
+# Run 'aws configure' to set up credentials for local development.

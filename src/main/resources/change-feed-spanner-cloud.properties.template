@@ -1,0 +1,48 @@
+# ---------------------------------------------------------------------------
+#  Change Feed Sample — Google Cloud Spanner (Cloud)
+# ---------------------------------------------------------------------------
+#
+#  This template is used by ChangeFeedExtendedRetentionSample to demonstrate
+#  the SDK's extended-retention opt-in against a provider that DECLARES
+#  Capability.EXTENDED_CHANGE_FEED_HISTORY. Spanner supports up to 7 days of
+#  native change-stream retention via:
+#    CREATE CHANGE STREAM ... OPTIONS(retention_period = '7d',
+#                                     value_capture_type = 'NEW_ROW')
+#
+#  -- HOW TO USE -------------------------------------------------------------
+#  1. Copy this file and remove the .template extension:
+#       cp src/main/resources/change-feed-spanner-cloud.properties.template \
+#          src/main/resources/change-feed-spanner-cloud.properties
+#  2. Fill in YOUR values below (marked with <...>)
+#  3. The *.properties file is git-ignored — it will never be committed.
+#
+#  Authentication uses Application Default Credentials (ADC):
+#    gcloud auth application-default login
+#
+#  Then run:
+#    java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
+#         -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+#         com.multiclouddb.samples.ChangeFeedExtendedRetentionSample
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=spanner
+
+# --- Application Settings ---------------------------------------------------
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+
+# --- Google Cloud Spanner (Cloud) -------------------------------------------
+# Your Google Cloud project ID
+# Run: gcloud config get-value project
+multiclouddb.connection.projectId=<YOUR-GCP-PROJECT-ID>
+
+# Your Spanner instance ID
+# Run: gcloud spanner instances list --project=<YOUR-GCP-PROJECT-ID>
+multiclouddb.connection.instanceId=<YOUR-SPANNER-INSTANCE-ID>
+
+# The Spanner database ID
+multiclouddb.connection.databaseId=multiclouddb-sdk-for-java-changefeed
+
+# -- No emulatorHost = connects to real Google Cloud Spanner ----------------
+# For the local emulator, set: multiclouddb.connection.emulatorHost=localhost:9010
+# multiclouddb.connection.emulatorHost=
