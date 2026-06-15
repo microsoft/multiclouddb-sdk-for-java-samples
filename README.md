@@ -21,35 +21,16 @@ Each sample runs against **Azure Cosmos DB**, **Amazon DynamoDB**, or **Google C
 java -version   # must be 17 or later
 ```
 
-### 2 — Build the Multicloud DB SDK locally
+### 2 — Build this project
 
-The SDK artifacts (`multiclouddb-api`, `multiclouddb-provider-*`) are not yet published to Maven Central. You need to install them into your local `~/.m2` repository first.
-
-```bash
-# Clone the main SDK repo
-git clone https://github.com/microsoft/multiclouddb-sdk-for-java.git
-cd multiclouddb-sdk-for-java
-
-# Install all modules into ~/.m2 (skipping tests for speed)
-mvn clean install -DskipTests
-```
-
-Once that succeeds, the artifacts are available at:
-
-```
-~/.m2/repository/com/microsoft/multiclouddb/
-  multiclouddb-api/0.1.0-beta.2/
-  multiclouddb-provider-cosmos/0.1.0-beta.2/
-  multiclouddb-provider-dynamo/0.1.0-beta.2/
-  multiclouddb-provider-spanner/0.1.0-beta.2/
-```
-
-### 3 — Build this project
+SDK dependencies are pulled from Maven Central by default — no extra setup needed.
 
 ```bash
 # In this repo root
 mvn compile
 ```
+
+> **Developing the SDK itself?** See [SDK Version](#sdk-version) below for how to point the build at a locally-built SDK via a git-ignored override file.
 
 ---
 
@@ -260,8 +241,32 @@ multiclouddb-samples/
 
 ## SDK Version
 
-This project depends on **Multicloud DB SDK `0.1.0-beta.2`**.  
-To upgrade, change the `multiclouddb-*.version` properties in `pom.xml` and re-run `mvn clean install -DskipTests` in the main SDK repo.
+This project depends on **Multicloud DB SDK `0.1.0-beta.1`** ([Maven Central](https://search.maven.org/artifact/com.microsoft.multiclouddb/multiclouddb-api)).
+
+### Upgrading
+
+To pick up a newer released version, bump the `multiclouddb-*.version` properties in `pom.xml`.
+
+### Testing against a locally-built SDK
+
+When developing the SDK itself, you can point this project at a locally-installed build without modifying `pom.xml`:
+
+```bash
+# 1. Build & install the SDK locally
+cd <multiclouddb-sdk-for-java>
+mvn clean install -DskipTests
+
+# 2. Activate the override in this repo
+cp .mvn/maven.config.example .mvn/maven.config
+
+# 3. Edit .mvn/maven.config to match the version you just installed
+#    (defaults to 0.2.0-SNAPSHOT in the template)
+
+# 4. Build as usual — Maven picks up .mvn/maven.config automatically
+mvn compile
+```
+
+`.mvn/maven.config` is git-ignored, so per-developer overrides never leak into commits.
 
 ---
 

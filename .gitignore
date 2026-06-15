@@ -22,3 +22,7 @@ target/
 # Sensitive config (real credentials — copy from *.template files)
 *-cloud.properties
 !*-cloud.properties.template
+
+# Per-developer Maven CLI overrides (e.g., for testing a locally-built SDK).
+# See .mvn/maven.config.example for the template.
+.mvn/maven.config

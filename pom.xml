@@ -15,11 +15,9 @@
         Runs against Azure Cosmos DB, Amazon DynamoDB, or Google Cloud Spanner by changing
         a single properties file.
 
-        Prerequisites:
-          1. Clone https://github.com/microsoft/multiclouddb-sdk-for-java
-          2. Run: mvn clean install -DskipTests
-             This installs the SDK artifacts into your local ~/.m2 repository.
-          3. Then build this project: mvn compile
+        SDK dependencies are resolved from Maven Central by default. To test against a
+        locally-built SDK instead, copy .mvn/maven.config.example to .mvn/maven.config
+        and set the version overrides there (the file is git-ignored).
     </description>
     <url>https://github.com/allenkim0129/multiclouddb-samples</url>
 
@@ -39,9 +37,14 @@
 
         <!--
             Multicloud DB SDK versions.
-            These artifacts are resolved from your local ~/.m2 repository.
-            Build the SDK first: mvn clean install -DskipTests
-            (in the multiclouddb-sdk-for-java repo root)
+
+            Defaults track the latest version published to Maven Central
+            (https://search.maven.org/artifact/com.microsoft.multiclouddb/multiclouddb-api).
+            No local SDK build is required for the defaults.
+
+            To test against a locally-built SDK (e.g., while developing the SDK
+            itself), copy .mvn/maven.config.example to .mvn/maven.config and set
+            the per-property overrides there. That file is git-ignored.
         -->
         <multiclouddb-api.version>0.1.0-beta.1</multiclouddb-api.version>
         <multiclouddb-provider-cosmos.version>0.1.0-beta.1</multiclouddb-provider-cosmos.version>
@@ -59,9 +62,9 @@
     <dependencies>
 
         <!-- ============================================================
-             Multicloud DB SDK — resolved from local ~/.m2 repository.
-             Run `mvn clean install -DskipTests` in multiclouddb-sdk-for-java
-             to populate these before building this project.
+             Multicloud DB SDK — resolved from Maven Central by default.
+             Override versions for local SDK builds via .mvn/maven.config
+             (see .mvn/maven.config.example).
              ============================================================ -->
         <dependency>
             <groupId>com.microsoft.multiclouddb</groupId>
