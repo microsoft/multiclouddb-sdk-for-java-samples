@@ -1,6 +1,7 @@
 # Maven build output
 target/
 .flattened-pom.xml
+dependency-reduced-pom.xml
 
 # IntelliJ IDEA
 .idea/
