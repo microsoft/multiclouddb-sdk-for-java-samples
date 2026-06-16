@@ -12,10 +12,12 @@ Write-Host ""
 
 $PropsTodo = "src\main\resources\todo-app-cosmos-cloud.properties"
 $PropsRisk = "src\main\resources\risk-platform-cosmos-cloud.properties"
+$PropsCF   = "src\main\resources\change-feed-cosmos-cloud.properties"
 
 Write-Host "Looking for properties files..."
 if (Test-Path $PropsTodo) { Write-Host "  Found : $PropsTodo" } else { Write-Host "  Missing: $PropsTodo" }
 if (Test-Path $PropsRisk) { Write-Host "  Found : $PropsRisk" } else { Write-Host "  Missing: $PropsRisk" }
+if (Test-Path $PropsCF)   { Write-Host "  Found : $PropsCF" }   else { Write-Host "  Missing: $PropsCF" }
 Write-Host ""
 
 function Get-Prop([string]$Key, [string]$File) {
@@ -28,7 +30,7 @@ function Get-Prop([string]$Key, [string]$File) {
 if (-not $CosmosAccount) { $CosmosAccount = $env:COSMOS_ACCOUNT }
 if (-not $CosmosAccount) {
     Write-Host "Resolving Cosmos account from properties files..."
-    foreach ($Props in @($PropsTodo, $PropsRisk)) {
+    foreach ($Props in @($PropsTodo, $PropsRisk, $PropsCF)) {
         $ep = Get-Prop "multiclouddb.connection.endpoint" $Props
         if ($ep -match "https://([^.]+)\.documents\.azure\.com") {
             $CosmosAccount = $Matches[1]; Write-Host "  Resolved from $Props -> $CosmosAccount"; break
@@ -40,7 +42,7 @@ if (-not $CosmosAccount) { $CosmosAccount = Read-Host "Enter your Cosmos DB acco
 if (-not $ResourceGroup) { $ResourceGroup = $env:RESOURCE_GROUP }
 if (-not $ResourceGroup) {
     Write-Host "Resolving resource group from properties files..."
-    foreach ($Props in @($PropsTodo, $PropsRisk)) {
+    foreach ($Props in @($PropsTodo, $PropsRisk, $PropsCF)) {
         $ResourceGroup = Get-Prop "multiclouddb.connection.resourceGroupName" $Props
         if ($ResourceGroup) { Write-Host "  Resolved from $Props -> $ResourceGroup"; break }
     }
@@ -59,16 +61,19 @@ $TodoDbs = @("multiclouddb-sdk-for-java-todo-app")
 $RiskDbs  = @("multiclouddb-sdk-for-java-risk-admin","multiclouddb-sdk-for-java-risk-acme-capital",
               "multiclouddb-sdk-for-java-risk-vanguard-partners","multiclouddb-sdk-for-java-risk-summit-wealth",
               "multiclouddb-sdk-for-java-risk-shared")
+$ChangeFeedDbs = @("multiclouddb-sdk-for-java-changefeed")
 
 Write-Host "Which databases do you want to clean up?"
 Write-Host "  1) Todo App only  (multiclouddb-sdk-for-java-todo-*)"
 Write-Host "  2) Risk Platform only  (multiclouddb-sdk-for-java-risk-*)"
-Write-Host "  3) All (both apps)"
-$Choice = Read-Host "Enter choice [1-3]"
+Write-Host "  3) Change Feed only  (multiclouddb-sdk-for-java-changefeed)"
+Write-Host "  4) All (all apps)"
+$Choice = Read-Host "Enter choice [1-4]"
 switch ($Choice) {
     "1" { $Candidates = $TodoDbs }
     "2" { $Candidates = $RiskDbs }
-    "3" { $Candidates = $TodoDbs + $RiskDbs }
+    "3" { $Candidates = $ChangeFeedDbs }
+    "4" { $Candidates = $TodoDbs + $RiskDbs + $ChangeFeedDbs }
     default { Write-Error "Invalid choice. Aborting."; exit 1 }
 }
 Write-Host ""

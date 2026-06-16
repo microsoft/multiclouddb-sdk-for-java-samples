@@ -13,10 +13,12 @@ echo ""
 
 PROPS_TODO="src/main/resources/todo-app-cosmos-cloud.properties"
 PROPS_RISK="src/main/resources/risk-platform-cosmos-cloud.properties"
+PROPS_CF="src/main/resources/change-feed-cosmos-cloud.properties"
 
 echo "Looking for properties files..."
 [[ -f "$PROPS_TODO" ]] && echo "  Found : $PROPS_TODO" || echo "  Missing: $PROPS_TODO"
 [[ -f "$PROPS_RISK" ]] && echo "  Found : $PROPS_RISK" || echo "  Missing: $PROPS_RISK"
+[[ -f "$PROPS_CF" ]]   && echo "  Found : $PROPS_CF"   || echo "  Missing: $PROPS_CF"
 echo ""
 
 # -- Helper -------------------------------------------------------------------
@@ -30,7 +32,7 @@ resolve_from_props() {
 # -- Cosmos account -----------------------------------------------------------
 if [[ -z "${COSMOS_ACCOUNT:-}" ]]; then
   echo "Resolving Cosmos account from properties files..."
-  for PROPS in "$PROPS_TODO" "$PROPS_RISK"; do
+  for PROPS in "$PROPS_TODO" "$PROPS_RISK" "$PROPS_CF"; do
     ENDPOINT=$(resolve_from_props "multiclouddb.connection.endpoint" "$PROPS")
     if [[ -n "$ENDPOINT" ]]; then
       COSMOS_ACCOUNT=$(echo "$ENDPOINT" | sed -E 's|https://([^.]+)\.documents\.azure\.com.*|\1|')
@@ -46,7 +48,7 @@ fi
 # -- Resource group -----------------------------------------------------------
 if [[ -z "${RESOURCE_GROUP:-}" ]]; then
   echo "Resolving resource group from properties files..."
-  for PROPS in "$PROPS_TODO" "$PROPS_RISK"; do
+  for PROPS in "$PROPS_TODO" "$PROPS_RISK" "$PROPS_CF"; do
     RESOURCE_GROUP=$(resolve_from_props "multiclouddb.connection.resourceGroupName" "$PROPS")
     if [[ -n "$RESOURCE_GROUP" ]]; then
       echo "  Resolved from $PROPS → $RESOURCE_GROUP"; break
@@ -80,19 +82,22 @@ RISK_DBS=(
   multiclouddb-sdk-for-java-risk-summit-wealth
   multiclouddb-sdk-for-java-risk-shared
 )
+CHANGEFEED_DBS=(multiclouddb-sdk-for-java-changefeed)
 
 # -- Scope selection ----------------------------------------------------------
 echo "Which databases do you want to clean up?"
-PS3="Enter choice [1-3]: "
+PS3="Enter choice [1-4]: "
 select SCOPE in \
   "Todo App only  (multiclouddb-sdk-for-java-todo-*)" \
   "Risk Platform only  (multiclouddb-sdk-for-java-risk-*)" \
-  "All (both apps)"; do
+  "Change Feed only  (multiclouddb-sdk-for-java-changefeed)" \
+  "All (all apps)"; do
   case $SCOPE in
     "Todo App only"*)      CANDIDATES=("${TODO_DBS[@]}"); break ;;
     "Risk Platform only"*) CANDIDATES=("${RISK_DBS[@]}"); break ;;
-    "All (both apps)")     CANDIDATES=("${TODO_DBS[@]}" "${RISK_DBS[@]}"); break ;;
-    *) echo "Invalid choice — enter 1, 2, or 3." ;;
+    "Change Feed only"*)   CANDIDATES=("${CHANGEFEED_DBS[@]}"); break ;;
+    "All (all apps)")      CANDIDATES=("${TODO_DBS[@]}" "${RISK_DBS[@]}" "${CHANGEFEED_DBS[@]}"); break ;;
+    *) echo "Invalid choice — enter 1, 2, 3, or 4." ;;
   esac
 done
 echo ""
