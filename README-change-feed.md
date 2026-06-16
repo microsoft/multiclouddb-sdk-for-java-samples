@@ -181,19 +181,101 @@ Discovered 3 partition cursor(s) at the live tip.
 
 ### Quick setup: 3 partitions on a live Cosmos account
 
-Use the Azure CLI to scale the container up:
+#### 1. Raise the account throughput limit (if needed)
 
-```bash
-az cosmosdb sql container throughput update \
-    --account-name <account> -g <rg> \
-    --database-name multiclouddb-sdk-for-java-changefeed \
-    --name change-feed-demo \
+The default limit on many accounts is 4,000 RU/s. In the Azure Portal:
+
+**Azure Portal** → Cosmos DB account → **Settings** → **Account Throughput**
+→ raise the limit to ≥ 50,000 → **Save**.
+
+#### 2. Scale the container to 30,000 RU/s
+
+```powershell
+az cosmosdb sql container throughput update `
+    --account-name <account> -g <rg> `
+    --database-name multiclouddb-sdk-for-java-changefeed `
+    --name change-feed-demo `
     --throughput 30000
 ```
 
-After the partition split completes (usually seconds), `listCursors` will
-return 3+ cursors. You can then scale throughput back down to save cost;
-the physical partitions persist.
+#### 3. Wait for the partition split to complete
+
+The split is asynchronous and typically takes 4–10 minutes. Monitor with:
+
+```powershell
+az cosmosdb sql container throughput show `
+    --account-name <account> -g <rg> `
+    --database-name multiclouddb-sdk-for-java-changefeed `
+    --name change-feed-demo `
+    --query "resource.instantMaximumThroughput"
+```
+
+- `"10000"` → 1 partition (split not started)
+- `"20000"` → 2 partitions (in progress)
+- `"30000"` → 3 partitions (**done** ✓)
+
+#### 4. Scale throughput back down to save cost
+
+Once the split is done, physical partitions **never merge back**, so you
+can scale down immediately and keep the 3 cursors:
+
+```powershell
+az cosmosdb sql container throughput update `
+    --account-name <account> -g <rg> `
+    --database-name multiclouddb-sdk-for-java-changefeed `
+    --name change-feed-demo `
+    --throughput 400
+```
+
+> **Cost note:** 30,000 RU/s costs ~$1.75/hr. Scale down as soon as the
+> split completes — you only need the high throughput long enough for Cosmos
+> to create the physical partitions.
+
+#### 5. Run the watcher and add items with different partition keys
+
+```powershell
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Then in the **Azure Portal** → **Data Explorer** → `change-feed-demo` →
+**New Item**, add items with varied `partitionKey` values so they hash to
+different physical partitions:
+
+```json
+{"id": "a1", "partitionKey": "1",     "title": "test"}
+{"id": "a2", "partitionKey": "100",   "title": "test"}
+{"id": "a3", "partitionKey": "999",   "title": "test"}
+{"id": "a4", "partitionKey": "abc",   "title": "test"}
+{"id": "a5", "partitionKey": "zzz",   "title": "test"}
+{"id": "a6", "partitionKey": "hello", "title": "test"}
+```
+
+The watcher will print each event with its cursor index. Example output
+showing events distributed across all 3 cursors:
+
+```
+Discovered 3 partition cursor(s) at the live tip.
+  cursor-0: eyJ2IjoxLCJwIjoiY29zbW9z…
+  cursor-1: eyJ2IjoxLCJwIjoiY29zbW9z…
+  cursor-2: eyJ2IjoxLCJwIjoiY29zbW9z…
+
+Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo …
+Press Ctrl+C to stop.
+
+[2026-06-16T18:26:39Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=1, sortKey=a1}      {"id":"a1","partitionKey":"1","title":"test", …}
+[2026-06-16T18:26:47Z] cursor-1  CREATE  MulticloudDbKey{partitionKey=100, sortKey=a2}    {"id":"a2","partitionKey":"100","title":"test", …}
+[2026-06-16T18:26:55Z] cursor-1  CREATE  MulticloudDbKey{partitionKey=999, sortKey=a3}    {"id":"a3","partitionKey":"999","title":"test", …}
+[2026-06-16T18:27:02Z] cursor-2  CREATE  MulticloudDbKey{partitionKey=abc, sortKey=a4}    {"id":"a4","partitionKey":"abc","title":"test", …}
+[2026-06-16T18:27:10Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=zzz, sortKey=a5}    {"id":"a5","partitionKey":"zzz","title":"test", …}
+[2026-06-16T18:27:15Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=hello, sortKey=a6}  {"id":"a6","partitionKey":"hello","title":"test", …}
+```
+
+> **Why do some keys land on the same cursor?** Cosmos hashes the partition
+> key and maps it to a hash range owned by a physical partition. With only 3
+> partitions, some keys inevitably collide. Items with the **same**
+> `partitionKey` always appear on the same cursor.
 
 ### Reading cursor identifiers in the sample output
 
