@@ -113,13 +113,12 @@ public class ChangeFeedSample {
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk())) {
 
             // Bail out early if the active provider doesn't support change
-            // feed (Capability.CHANGE_FEED is gated to Cosmos in the SDK).
-            // This is the portable way to detect a Capability-gated feature.
+            // feed. All three providers (Cosmos, DynamoDB, Spanner) declare
+            // Capability.CHANGE_FEED in the current SDK.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 System.err.println("Change feed is not supported on "
-                        + provider.displayName()
-                        + ". Use a Cosmos config (e.g. change-feed-cosmos.properties).");
+                        + provider.displayName() + ".");
                 return;
             }
 

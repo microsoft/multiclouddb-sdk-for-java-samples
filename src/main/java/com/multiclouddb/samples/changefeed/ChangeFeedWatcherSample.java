@@ -26,7 +26,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * Continuous change-feed watcher — keeps running until Ctrl+C and prints
  * every CREATE / UPDATE / DELETE event as it arrives. Use this to observe
  * the change feed while you add or delete items manually (e.g., from the
- * Azure Portal Data Explorer, the Cosmos emulator UI, or another writer).
+ * Azure Portal Data Explorer, the Cosmos emulator UI, the DynamoDB console,
+ * the Spanner console, or another writer).
  * <p>
  * Unlike {@link ChangeFeedSample}, this watcher does not produce any writes
  * of its own — it only consumes.
@@ -34,14 +35,22 @@ import java.util.concurrent.atomic.AtomicLong;
  * Usage:
  *
  * <pre>
- *   # Live Cosmos account (master-key auth — see ChangeFeedSample javadoc
- *   # for the cp + mvn package setup steps that put the cloud config on
- *   # the fat-jar classpath)
+ *   # Live Cosmos account (master-key auth)
  *   java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
  *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
  *
- *   # Local Cosmos emulator (default)
+ *   # DynamoDB (local or cloud)
+ *   java -Dmulticlouddb.config=change-feed-dynamo.properties \
+ *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+ *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+ *
+ *   # Spanner (emulator or cloud)
+ *   java -Dmulticlouddb.config=change-feed-spanner.properties \
+ *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+ *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+ *
+ *   # Local Cosmos emulator (default — no -D flag needed)
  *   java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
  *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
  *
@@ -55,12 +64,12 @@ import java.util.concurrent.atomic.AtomicLong;
  * <h3>Try it</h3>
  * <ol>
  *   <li>Start the watcher. It prints "Watching … (press Ctrl+C to stop)".</li>
- *   <li>In the Azure Portal, open Data Explorer for the
- *       {@code multiclouddb-sdk-for-java-changefeed/change-feed-demo}
- *       container and create, edit, or delete items.</li>
+ *   <li>In the provider's console (Azure Portal Data Explorer, DynamoDB
+ *       console, Spanner console) create, edit, or delete items in the
+ *       target container/table.</li>
  *   <li>Watch the console — each operation surfaces as a
  *       {@code CREATE} / {@code UPDATE} / {@code DELETE} line within the
- *       poll interval.</li>
+ *       poll interval, tagged with the cursor index.</li>
  *   <li>Press Ctrl+C to stop. The watcher prints a final tally.</li>
  * </ol>
  *
@@ -72,6 +81,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li><b>Cosmos emulator</b> — the watcher pre-provisions the AVAD
  *       container with a 10-minute retention (the emulator's hard ceiling)
  *       on first run.</li>
+ *   <li><b>DynamoDB</b> — table needs {@code StreamSpecification(NEW_AND_OLD_IMAGES)}
+ *       enabled.</li>
+ *   <li><b>Spanner</b> — needs a change stream:
+ *       {@code CREATE CHANGE STREAM ... OPTIONS(value_capture_type='NEW_ROW')}.</li>
  * </ul>
  */
 public class ChangeFeedWatcherSample {
@@ -117,13 +130,13 @@ public class ChangeFeedWatcherSample {
 
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk())) {
 
-            // Bail out early on providers that don't support change feed
-            // (Capability.CHANGE_FEED is gated to Cosmos in the SDK).
+            // Bail out early if the active provider doesn't support change feed.
+            // All three providers (Cosmos, DynamoDB, Spanner) declare
+            // Capability.CHANGE_FEED in the current SDK.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 System.err.println("Change feed is not supported on "
-                        + provider.displayName()
-                        + ". Use a Cosmos config (e.g. change-feed-cosmos.properties).");
+                        + provider.displayName() + ".");
                 return;
             }
 

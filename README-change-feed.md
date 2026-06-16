@@ -7,22 +7,24 @@ change feed** across Azure Cosmos DB, Google Cloud Spanner, and Amazon DynamoDB.
 
 | Sample | Azure Cosmos DB | Google Cloud Spanner | Amazon DynamoDB |
 |--------|:---------------:|:--------------------:|:---------------:|
-| **`ChangeFeedSample`** (one-shot) | ✅ Supported | ❌ Not yet (exits gracefully) | ❌ Not yet (exits gracefully) |
-| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported | ❌ Not yet (exits gracefully) | ❌ Not yet (exits gracefully) |
+| **`ChangeFeedSample`** (one-shot) | ✅ Supported | ✅ Supported | ✅ Supported |
+| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported | ✅ Supported | ✅ Supported |
 | **`ChangeFeedExtendedRetentionSample`** (build-time gate) | ✅ Gate passes | ✅ Gate passes | ❌ Gate refuses (expected) |
 
-> **Why Cosmos-only for the data-plane samples?** The SDK currently gates
-> `Capability.CHANGE_FEED` to Cosmos. Pointing `ChangeFeedSample` or
-> `ChangeFeedWatcherSample` at a Spanner or DynamoDB config exits
-> gracefully with *"Change feed is not supported on \<provider\>."* — that
-> negative path is itself a useful demonstration of the capability-gating
-> pattern. When the SDK adds change-feed support for additional providers,
-> these samples will work without code changes.
+> **Provider-specific prerequisites.** All three providers declare
+> `Capability.CHANGE_FEED`, so the samples work on any of them. However,
+> each provider requires out-of-band setup before the change feed is
+> functional:
 >
-> **`ChangeFeedExtendedRetentionSample`** works against **all three
-> providers** — the build-time gate is purely capability-based and runs
-> before any wire I/O, so it works with emulators, local endpoints, or
-> cloud accounts interchangeably.
+> | Provider | Prerequisite |
+> |----------|-------------|
+> | **Cosmos DB (live)** | Account must have **Continuous Backup** enabled (AVAD is then automatic on every container). |
+> | **Cosmos DB (emulator)** | The sample auto-provisions an AVAD container with a 10-min retention policy (no manual setup). |
+> | **DynamoDB** | Table must have `StreamSpecification(NEW_AND_OLD_IMAGES)` enabled. |
+> | **Spanner** | A change stream must be created: `CREATE CHANGE STREAM <name> FOR <collection> OPTIONS(value_capture_type='NEW_ROW')`. |
+>
+> Without the prerequisite, `listCursors` / `readChanges` will surface a
+> portable `UNSUPPORTED_CAPABILITY(stream_not_enabled)` error.
 
 ### Sample descriptions
 
@@ -317,19 +319,12 @@ same partition key always appear on the same cursor.
 
 ## Emulator Setup
 
-`ChangeFeedSample` and `ChangeFeedWatcherSample` exercise the change-feed
-data plane against **Cosmos only** — the SDK gates `Capability.CHANGE_FEED`
-to Cosmos in this repo. `ChangeFeedExtendedRetentionSample` exercises the
-build-time capability gate and works against **all three providers** (the
-gate is purely capability-based and runs before any wire I/O — see the
-[Extended Retention Escape Hatch](#extended-retention-escape-hatch) section).
-
-The Spanner and DynamoDB emulators below are optional for the
-extended-retention sample: because the gate refuses or accepts the
-configured provider before contacting it, you can run that sample with a
-config that points at a non-running emulator and still get the expected
-build-time result. Starting the emulator only matters if you intend to
-extend the sample to issue real reads / writes.
+All three samples work against emulators / local endpoints. The data-plane
+samples (`ChangeFeedSample`, `ChangeFeedWatcherSample`) require the
+provider-specific change-feed prerequisite to be met (see the Provider
+Support Matrix above). `ChangeFeedExtendedRetentionSample` exercises the
+build-time capability gate and works before any wire I/O — so it works
+even if the emulator isn't running.
 
 ### Cosmos DB Emulator
 
