@@ -1,11 +1,30 @@
 # Multicloud DB SDK — Change Feed Samples
 
 Three command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
-change feed**. The first two consume the **All-Versions-and-Deletes (AVAD)**
-change feed against Azure Cosmos DB so they observe `CREATE`, `UPDATE`, **and**
-`DELETE` events — not just the latest version per document. The third targets
-all three providers and demonstrates the SDK's **build-time capability gate**
-for the extended-retention escape hatch.
+change feed** across Azure Cosmos DB, Google Cloud Spanner, and Amazon DynamoDB.
+
+## Provider Support Matrix
+
+| Sample | Azure Cosmos DB | Google Cloud Spanner | Amazon DynamoDB |
+|--------|:---------------:|:--------------------:|:---------------:|
+| **`ChangeFeedSample`** (one-shot) | ✅ Supported | ❌ Not yet (exits gracefully) | ❌ Not yet (exits gracefully) |
+| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported | ❌ Not yet (exits gracefully) | ❌ Not yet (exits gracefully) |
+| **`ChangeFeedExtendedRetentionSample`** (build-time gate) | ✅ Gate passes | ✅ Gate passes | ❌ Gate refuses (expected) |
+
+> **Why Cosmos-only for the data-plane samples?** The SDK currently gates
+> `Capability.CHANGE_FEED` to Cosmos. Pointing `ChangeFeedSample` or
+> `ChangeFeedWatcherSample` at a Spanner or DynamoDB config exits
+> gracefully with *"Change feed is not supported on \<provider\>."* — that
+> negative path is itself a useful demonstration of the capability-gating
+> pattern. When the SDK adds change-feed support for additional providers,
+> these samples will work without code changes.
+>
+> **`ChangeFeedExtendedRetentionSample`** works against **all three
+> providers** — the build-time gate is purely capability-based and runs
+> before any wire I/O, so it works with emulators, local endpoints, or
+> cloud accounts interchangeably.
+
+### Sample descriptions
 
 | Sample | Behavior | Use it for |
 |--------|----------|------------|
@@ -25,17 +44,18 @@ the Todo App or Risk Platform samples.
 > templates stay at the resources root (`src/main/resources/change-feed-*.properties[.template]`)
 > because `ConfigLoader` reads them by classpath name.
 
-> **Provider scope:** `ChangeFeedSample` and `ChangeFeedWatcherSample`
-> currently support **Cosmos only** — the SDK gates `Capability.CHANGE_FEED`
-> to Cosmos, so pointing those two samples at a Spanner or DynamoDB config
-> exits gracefully with `Change feed is not supported on <provider>.` (that
-> negative path is itself a useful demonstration of the capability-gating
-> pattern). `ChangeFeedExtendedRetentionSample` works against **all three
-> providers, against either the cloud endpoint or the local emulator** —
-> the build-time gate is purely capability-based and runs before any wire
-> I/O, so a Spanner emulator or DynamoDB Local config produces the same
-> outcome as the cloud counterpart. Configs for all three providers ship
-> in `src/main/resources/change-feed-*.properties[.template]`.
+### Configuration files per provider
+
+| Provider | Emulator / Local config (shipped) | Cloud config (template → copy + fill in) |
+|----------|-----------------------------------|------------------------------------------|
+| **Cosmos DB** | `change-feed-cosmos.properties` | `change-feed-cosmos-cloud.properties.template` |
+| **Spanner** | `change-feed-spanner.properties` | `change-feed-spanner-cloud.properties.template` |
+| **DynamoDB** | `change-feed-dynamo.properties` | `change-feed-dynamo-cloud.properties.template` |
+
+> Emulator/local configs work out of the box for the extended-retention
+> sample (no credentials needed — the gate runs before any wire I/O).
+> Cloud configs (gitignored) require real credentials; copy the
+> `.template` file, fill in your endpoint/keys, then rebuild the fat jar.
 
 ---
 
