@@ -43,29 +43,30 @@ the Todo App or Risk Platform samples.
 
 1. [Prerequisites](#prerequisites)
 2. [Provisioning Model — Why Continuous Backup Matters](#provisioning-model--why-continuous-backup-matters)
-3. [Emulator Setup](#emulator-setup)
+3. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
+4. [Emulator Setup](#emulator-setup)
    - [Cosmos DB Emulator](#cosmos-db-emulator)
    - [Spanner Emulator](#spanner-emulator)
    - [DynamoDB Local](#dynamodb-local)
-4. [Running the Samples](#running-the-samples)
+5. [Running the Samples](#running-the-samples)
    - [Build the fat jar](#build-the-fat-jar)
    - [Against the Cosmos DB Emulator](#run-against-the-cosmos-db-emulator)
    - [Against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud)
    - [Tuning the watcher poll interval](#tuning-the-watcher-poll-interval)
-5. [Example Output](#example-output)
+6. [Example Output](#example-output)
    - [`ChangeFeedSample` (one-shot)](#changefeedsample-one-shot)
    - [`ChangeFeedWatcherSample` (continuous)](#changefeedwatchersample-continuous)
-6. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
+7. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
    - [Per-provider behaviour](#per-provider-behaviour)
    - [Running `ChangeFeedExtendedRetentionSample`](#running-changefeedextendedretentionsample)
    - [Example output](#example-output-changefeedextendedretentionsample)
-7. [Configuration Reference](#configuration-reference)
-8. [Cloud Setup](#cloud-setup)
+8. [Configuration Reference](#configuration-reference)
+9. [Cloud Setup](#cloud-setup)
    - [Step 1 — Create a Continuous-Backup Cosmos account](#step-1--create-a-continuous-backup-cosmos-account)
    - [Step 2 — Create the properties file](#step-2--create-the-properties-file)
    - [Step 3 — Build and run](#step-3--build-and-run)
    - [Step 4 — Clean up Cosmos DB resources](#step-4--clean-up-cosmos-db-resources-optional)
-9. [Troubleshooting](#troubleshooting)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -123,6 +124,92 @@ az cosmosdb show --name <account> --resource-group <rg> \
 > *"Turning on continuous backups creates the all versions and deletes change
 > feed"* — i.e. CB makes AVAD automatic, so the opt-in is unnecessary and
 > harmful on CB accounts.
+
+---
+
+## Multiple Partitions — Seeing 3+ Cursors
+
+Each physical partition in Cosmos DB maps to one change-feed cursor returned
+by `listCursors(...)`. A small container with default throughput
+(~400 RU/s) typically has **1 physical partition → 1 cursor**. To see events
+flowing through multiple cursors in the sample output, you need to force
+multiple physical partitions.
+
+### How Cosmos DB assigns physical partitions
+
+| Provisioned throughput | Physical partitions | Cursors |
+|------------------------|---------------------|---------|
+| ≤ 10,000 RU/s         | 1                   | 1       |
+| 10,001–20,000 RU/s    | 2                   | 2       |
+| 20,001–30,000 RU/s    | 3                   | 3       |
+| …                      | …                   | …       |
+
+Cosmos allocates roughly **1 physical partition per 10,000 RU/s**.
+Partitions never merge back, so you can scale throughput up to create
+partitions and then scale it back down to save cost — the partitions
+(and cursors) persist.
+
+### Quick setup: 3 partitions on the emulator
+
+Uncomment and set `multiclouddb.throughput=30000` in
+`change-feed-cosmos.properties`:
+
+```properties
+multiclouddb.throughput=30000
+```
+
+Then run `ChangeFeedSample` or `ChangeFeedWatcherSample` — the provisioning
+step will create the container with 30,000 RU/s (3 physical partitions).
+The sample output will show:
+
+```
+Discovered 3 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIj…
+  cursor-1: eyJ0eXBlIj…
+  cursor-2: eyJ0eXBlIj…
+```
+
+> **Note:** `createContainerIfNotExists` is a no-op if the container already
+> exists. If you previously ran with the default throughput, **delete the
+> container first** (via the emulator UI or the Azure Portal) so it gets
+> recreated with the higher throughput:
+>
+> ```
+> # Emulator UI: https://localhost:8081/_explorer/index.html
+> # Delete the database 'multiclouddb-sdk-for-java-changefeed', then re-run.
+> ```
+
+### Quick setup: 3 partitions on a live Cosmos account
+
+Use the Azure CLI to scale the container up:
+
+```bash
+az cosmosdb sql container throughput update \
+    --account-name <account> -g <rg> \
+    --database-name multiclouddb-sdk-for-java-changefeed \
+    --name change-feed-demo \
+    --throughput 30000
+```
+
+After the partition split completes (usually seconds), `listCursors` will
+return 3+ cursors. You can then scale throughput back down to save cost;
+the physical partitions persist.
+
+### Reading cursor identifiers in the sample output
+
+Both `ChangeFeedSample` and `ChangeFeedWatcherSample` now prefix each
+change event with the cursor index (e.g. `cursor-0`, `cursor-1`, …) so
+you can see which physical partition each event came from:
+
+```
+[2025-06-16T09:00:01Z] cursor-0  CREATE  cf-1  {"title":"Event 1","iteration":1}
+[2025-06-16T09:00:01Z] cursor-2  CREATE  cf-2  {"title":"Event 2","iteration":2}
+[2025-06-16T09:00:02Z] cursor-1  UPDATE  cf-1  {"title":"Event 1 (updated)","iteration":99}
+```
+
+Items with different `/partitionKey` values will land in different physical
+partitions, so you'll see events spread across cursors. Items with the
+same partition key always appear on the same cursor.
 
 ---
 
@@ -395,6 +482,7 @@ Mode    : LIVE
 
 --- listCursors (live tip) ---
   Discovered 1 partition cursor(s)
+  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
 
 --- readChanges (consuming events) ---
   [writer] upsert cf-1
@@ -405,14 +493,14 @@ Mode    : LIVE
   [writer] upsert cf-6
   [writer] update cf-1
   [writer] delete cf-1
-  [consumer] CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-  [consumer] CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
-  [consumer] CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
-  [consumer] CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
-  [consumer] CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
-  [consumer] CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
-  [consumer] UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-  [consumer] DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
 
   Total events observed: 8
 
@@ -437,13 +525,14 @@ Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
 Poll interval: 1000 ms
 
 Discovered 1 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
 
 Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo — go add/update/delete items (e.g., in the Azure Portal Data Explorer).
 Press Ctrl+C to stop.
 
-[2026-06-12T19:40:55Z] CREATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello", ...}
-[2026-06-12T19:40:57Z] UPDATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello (edited)", ...}
-[2026-06-12T19:40:58Z] DELETE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {}
+[2026-06-12T19:40:55Z] cursor-0  CREATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello", ...}
+[2026-06-12T19:40:57Z] cursor-0  UPDATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello (edited)", ...}
+[2026-06-12T19:40:58Z] cursor-0  DELETE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {}
 
 ^C
 --- Stopping watcher ---

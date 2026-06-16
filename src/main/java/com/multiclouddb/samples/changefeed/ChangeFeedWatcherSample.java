@@ -106,7 +106,10 @@ public class ChangeFeedWatcherSample {
         System.out.println();
 
         if (isCosmosEmulator) {
-            ChangeFeedSampleSupport.provisionCosmosAvadContainer(appConfig, database, collection);
+            int throughputRU = parseThroughputRU(
+                    appConfig.property("multiclouddb.throughput", null));
+            ChangeFeedSampleSupport.provisionCosmosAvadContainer(
+                    appConfig, database, collection, throughputRU);
         }
 
         AtomicBoolean shutdown = new AtomicBoolean(false);
@@ -133,6 +136,10 @@ public class ChangeFeedWatcherSample {
             // Anything written BEFORE this call will not be surfaced.
             List<ChangeFeedCursor> cursors = new ArrayList<>(client.listCursors(address));
             System.out.println("Discovered " + cursors.size() + " partition cursor(s) at the live tip.");
+            for (int i = 0; i < cursors.size(); i++) {
+                String token = cursors.get(i).toToken();
+                System.out.println("  cursor-" + i + ": " + token.substring(0, Math.min(80, token.length())) + "…");
+            }
             if (cursors.isEmpty()) {
                 System.err.println("No partition cursors returned. The container exists but the "
                         + "provider did not report any feed ranges — likely a configuration or "
@@ -166,7 +173,7 @@ public class ChangeFeedWatcherSample {
                         if (shutdown.get()) break;
                         ChangeFeedPage page = client.readChanges(address, cursors.get(i));
                         for (ChangeEvent ev : page.events()) {
-                            printEvent(ev);
+                            printEvent(ev, i);
                             totalEvents.incrementAndGet();
                         }
                         cursors.set(i, page.nextCursor());
@@ -210,9 +217,26 @@ public class ChangeFeedWatcherSample {
         }
     }
 
-    private static void printEvent(ChangeEvent ev) {
+    /**
+     * Parse the optional {@code multiclouddb.throughput} property as an
+     * integer RU/s value. Returns 0 (let Cosmos pick the default) when the
+     * property is absent or unparseable.
+     */
+    static int parseThroughputRU(String raw) {
+        if (raw == null || raw.isBlank()) return 0;
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException nfe) {
+            System.err.println("multiclouddb.throughput=" + raw
+                    + " is not a valid integer; using Cosmos default.");
+            return 0;
+        }
+    }
+
+    private static void printEvent(ChangeEvent ev, int cursorIndex) {
         StringBuilder sb = new StringBuilder()
                 .append('[').append(TS.format(ev.commitTimestamp())).append("] ")
+                .append("cursor-").append(cursorIndex).append("  ")
                 .append(String.format("%-6s ", ev.type()))
                 .append(ev.key());
         JsonNode doc = ev.data();

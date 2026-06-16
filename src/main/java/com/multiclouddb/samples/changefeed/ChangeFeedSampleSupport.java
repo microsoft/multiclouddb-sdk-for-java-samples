@@ -11,6 +11,7 @@ import com.azure.cosmos.CosmosClientBuilder;
 import com.azure.cosmos.GatewayConnectionConfig;
 import com.azure.cosmos.models.ChangeFeedPolicy;
 import com.azure.cosmos.models.CosmosContainerProperties;
+import com.azure.cosmos.models.ThroughputProperties;
 
 import java.net.URI;
 import java.time.Duration;
@@ -57,10 +58,17 @@ final class ChangeFeedSampleSupport {
      * The emulator caps AVAD retention at 10 minutes; that ceiling is the
      * value used here. On a live CB-enabled account AVAD is available
      * automatically and a plain {@code ensureContainer(...)} suffices.
+     *
+     * @param throughputRU provisioned throughput in RU/s. Use ≥ 30,000 to
+     *                     guarantee 3+ physical partitions (each partition
+     *                     tops out at ~10,000 RU/s). Pass 0 or negative to
+     *                     let Cosmos pick the default (typically 400 RU/s →
+     *                     1 partition).
      */
     static void provisionCosmosAvadContainer(ConfigLoader.AppConfig appConfig,
                                              String database,
-                                             String collection) {
+                                             String collection,
+                                             int throughputRU) {
         String endpoint = appConfig.sdk().connection().get("endpoint");
         String key = appConfig.sdk().connection().get("key");
         String mode = appConfig.sdk().connection().getOrDefault("connectionMode", "gateway");
@@ -79,9 +87,16 @@ final class ChangeFeedSampleSupport {
                     new CosmosContainerProperties(collection, "/partitionKey");
             props.setChangeFeedPolicy(
                     ChangeFeedPolicy.createAllVersionsAndDeletesPolicy(Duration.ofMinutes(10)));
-            cosmos.getDatabase(database).createContainerIfNotExists(props);
-            System.out.println("  [provision] AVAD container '" + database + "/" + collection
-                    + "' ready (emulator retention=10min)");
+            if (throughputRU > 0) {
+                cosmos.getDatabase(database).createContainerIfNotExists(
+                        props, ThroughputProperties.createManualThroughput(throughputRU));
+                System.out.println("  [provision] AVAD container '" + database + "/" + collection
+                        + "' ready (emulator retention=10min, throughput=" + throughputRU + " RU/s)");
+            } else {
+                cosmos.getDatabase(database).createContainerIfNotExists(props);
+                System.out.println("  [provision] AVAD container '" + database + "/" + collection
+                        + "' ready (emulator retention=10min)");
+            }
         }
     }
 }

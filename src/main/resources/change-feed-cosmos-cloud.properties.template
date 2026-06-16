@@ -37,3 +37,11 @@ multiclouddb.collection=change-feed-demo
 multiclouddb.connection.endpoint=<REPLACE_ME_ENDPOINT>
 multiclouddb.connection.key=<REPLACE_ME_PRIMARY_KEY>
 multiclouddb.connection.connectionMode=gateway
+
+# --- Throughput (optional, emulator only) ------------------------------------
+# On the emulator the sample creates the container via the Cosmos SDK. Set
+# this to ≥ 30000 to get 3+ physical partitions → 3+ change-feed cursors.
+# On a live account the container is created via ensureContainer() (portable
+# API) and throughput is controlled in the Azure Portal or via CLI:
+#   az cosmosdb sql container throughput update --throughput 30000 ...
+# multiclouddb.throughput=30000

@@ -104,7 +104,10 @@ public class ChangeFeedSample {
         // creates a plain container and AVAD is available automatically (see
         // sample javadoc).
         if (isCosmosEmulator) {
-            ChangeFeedSampleSupport.provisionCosmosAvadContainer(appConfig, database, collection);
+            int throughputRU = parseThroughputRU(
+                    appConfig.property("multiclouddb.throughput", null));
+            ChangeFeedSampleSupport.provisionCosmosAvadContainer(
+                    appConfig, database, collection, throughputRU);
         }
 
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk())) {
@@ -135,6 +138,10 @@ public class ChangeFeedSample {
             System.out.println("--- listCursors (live tip) ---");
             List<ChangeFeedCursor> cursors = client.listCursors(address);
             System.out.println("  Discovered " + cursors.size() + " partition cursor(s)");
+            for (int i = 0; i < cursors.size(); i++) {
+                String token = cursors.get(i).toToken();
+                System.out.println("  cursor-" + i + ": " + token.substring(0, Math.min(80, token.length())) + "…");
+            }
             if (cursors.isEmpty()) {
                 System.err.println("  No partition cursors returned. The container exists but the "
                         + "provider did not report any feed ranges — likely a configuration or "
@@ -176,6 +183,19 @@ public class ChangeFeedSample {
 
             System.out.println();
             System.out.println("=== Sample complete ===");
+        }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+
+    static int parseThroughputRU(String raw) {
+        if (raw == null || raw.isBlank()) return 0;
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (NumberFormatException nfe) {
+            System.err.println("multiclouddb.throughput=" + raw
+                    + " is not a valid integer; using Cosmos default.");
+            return 0;
         }
     }
 
@@ -234,8 +254,8 @@ public class ChangeFeedSample {
             for (int i = 0; i < cursors.size(); i++) {
                 ChangeFeedPage page = client.readChanges(address, cursors.get(i));
                 for (ChangeEvent ev : page.events()) {
-                    System.out.printf("  [consumer] %-6s %s @ %s%n",
-                            ev.type(), ev.key(), ev.commitTimestamp());
+                    System.out.printf("  [consumer] cursor-%d  %-6s %s @ %s%n",
+                            i, ev.type(), ev.key(), ev.commitTimestamp());
                     total++;
                 }
                 cursors.set(i, page.nextCursor());
