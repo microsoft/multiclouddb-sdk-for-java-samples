@@ -94,7 +94,8 @@
         <!-- ============================================================
              Provider SDKs needed at COMPILE time by samples that call
              provider-native APIs directly (e.g., ChangeFeedSample
-             pre-provisions a Cosmos AVAD container against the emulator).
+             pre-provisions a Cosmos AVAD container against the emulator,
+             and enables DynamoDB Streams on DynamoDB Local tables).
              The Multicloud DB SDK itself only needs these at runtime
              (see provider-* deps above) — declaring them here as compile
              scope lets samples that opt into provider-specific setup do
@@ -104,6 +105,12 @@
             <groupId>com.azure</groupId>
             <artifactId>azure-cosmos</artifactId>
             <version>${azure-cosmos.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb</artifactId>
+            <version>${aws-sdk.version}</version>
         </dependency>
 
         <!-- ============================================================

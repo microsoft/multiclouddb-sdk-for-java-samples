@@ -143,6 +143,14 @@ public class ChangeFeedWatcherSample {
             System.out.println("--- Provisioning '" + database + "/" + collection + "' ---");
             client.ensureDatabase(database);
             client.ensureContainer(address);
+
+            // DynamoDB workaround: ensureContainer() creates the table but
+            // does not enable DynamoDB Streams. Enable it now so listCursors
+            // can discover the stream.
+            if (ProviderId.DYNAMO.equals(provider)) {
+                String tableName = database + "__" + collection;
+                ChangeFeedSampleSupport.enableDynamoStreams(appConfig, tableName);
+            }
             System.out.println();
 
             // Discover one cursor per feed range, positioned at the live tip.
