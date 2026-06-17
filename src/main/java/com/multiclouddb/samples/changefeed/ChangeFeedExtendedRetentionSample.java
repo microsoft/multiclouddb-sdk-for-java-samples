@@ -12,11 +12,21 @@ import com.multiclouddb.api.MulticloudDbClientConfig;
 import com.multiclouddb.api.MulticloudDbClientFactory;
 import com.multiclouddb.api.MulticloudDbErrorCategory;
 import com.multiclouddb.api.MulticloudDbException;
+import com.multiclouddb.api.MulticloudDbKey;
 import com.multiclouddb.api.ProviderId;
+import com.multiclouddb.api.ResourceAddress;
+import com.multiclouddb.api.changefeed.ChangeEvent;
 import com.multiclouddb.api.changefeed.ChangeFeedConfig;
+import com.multiclouddb.api.changefeed.ChangeFeedCursor;
+import com.multiclouddb.api.changefeed.ChangeFeedPage;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Escape-hatch sample for the Multicloud DB SDK's <em>extended change-feed
@@ -97,6 +107,8 @@ import java.util.Map;
 public class ChangeFeedExtendedRetentionSample {
 
     private static final String DEFAULT_CONFIG = "change-feed-cosmos-cloud.properties";
+    private static final String DEFAULT_DATABASE = "multiclouddb_samples";
+    private static final String DEFAULT_COLLECTION = "retention_demo";
 
     /**
      * 7 days — strictly greater than the 24-hour portable baseline (so the
@@ -155,14 +167,52 @@ public class ChangeFeedExtendedRetentionSample {
                 System.out.println("  Notes     : " + cap.notes());
             }
             System.out.println();
-            System.out.println("Extended retention is honoured by the SDK on this provider. "
-                    + "Cursor tokens issued under this client carry the opt-in stamp and "
-                    + "can be resumed beyond 24h, up to the requested window.");
+
+            // === Data-plane: multi-threaded cursor reads ===
+            String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
+            String collection = appConfig.property("multiclouddb.collection", DEFAULT_COLLECTION);
+            ResourceAddress address = new ResourceAddress(database, collection);
+
+            // Provision schema
+            System.out.println("--- Provisioning '" + database + "/" + collection + "' ---");
+            client.ensureDatabase(database);
+            client.ensureContainer(address);
+
+            // DynamoDB workaround: enable Streams
+            if (ProviderId.DYNAMO.equals(provider)) {
+                String tableName = database + "__" + collection;
+                ChangeFeedSampleSupport.enableDynamoStreams(appConfig, tableName);
+            }
             System.out.println();
-            System.out.println("Data-plane round-trip (listCursors / readChanges) requires "
-                    + "provider-specific substrate setup and is out of scope for this "
-                    + "sample — see ChangeFeedSample / ChangeFeedWatcherSample for the "
-                    + "24h-baseline data-plane demo.");
+
+            // List cursors at the live tip
+            System.out.println("--- listCursors (live tip) ---");
+            List<ChangeFeedCursor> cursors = client.listCursors(address);
+            System.out.println("  Discovered " + cursors.size() + " partition cursor(s)");
+            for (int i = 0; i < cursors.size(); i++) {
+                String token = cursors.get(i).toToken();
+                System.out.println("  cursor-" + i + ": "
+                        + token.substring(0, Math.min(80, token.length())) + "…");
+            }
+            if (cursors.isEmpty()) {
+                System.err.println("  No partition cursors. Aborting sample.");
+                return;
+            }
+            System.out.println();
+
+            // Spawn a writer thread that produces events
+            AtomicBoolean writerDone = new AtomicBoolean(false);
+            Thread writer = new Thread(() -> runWriter(client, address, writerDone),
+                    "retention-writer");
+            writer.setDaemon(true);
+            writer.start();
+
+            // Multi-threaded drain: one thread per cursor
+            System.out.println("--- readChanges (multi-threaded consumption) ---");
+            int total = drainAll(client, address, cursors, writerDone);
+            System.out.println();
+            System.out.println("  Total events consumed: " + total
+                    + " across " + cursors.size() + " parallel thread(s).");
             System.out.println();
             System.out.println("=== Sample complete ===");
         } catch (MulticloudDbException ex) {
@@ -215,5 +265,92 @@ public class ChangeFeedExtendedRetentionSample {
             builder.userAgentSuffix(base.userAgentSuffix());
         }
         return builder.build();
+    }
+
+    // ── Writer: produces CREATE/UPDATE/DELETE events ─────────────────────────
+
+    private static void runWriter(MulticloudDbClient client,
+                                  ResourceAddress address,
+                                  AtomicBoolean done) {
+        try {
+            Thread.sleep(500);
+            // CREATEs
+            for (int i = 0; i < 5; i++) {
+                MulticloudDbKey key = MulticloudDbKey.of("ret-" + i, "ret-" + i);
+                client.upsert(address, key, Map.of(
+                        "title", "Retention item " + i,
+                        "seq", i));
+                System.out.println("  [writer] upsert ret-" + i);
+                Thread.sleep(200);
+            }
+            // UPDATEs
+            for (int i = 0; i < 2; i++) {
+                MulticloudDbKey key = MulticloudDbKey.of("ret-" + i, "ret-" + i);
+                client.upsert(address, key, Map.of(
+                        "title", "Retention item " + i + " (updated)",
+                        "seq", i));
+                System.out.println("  [writer] update ret-" + i);
+                Thread.sleep(200);
+            }
+            // DELETEs
+            for (int i = 3; i < 5; i++) {
+                MulticloudDbKey key = MulticloudDbKey.of("ret-" + i, "ret-" + i);
+                client.delete(address, key);
+                System.out.println("  [writer] delete ret-" + i);
+                Thread.sleep(200);
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        } finally {
+            done.set(true);
+        }
+    }
+
+    // ── Consumer: one thread per cursor (parallel partition consumption) ─────
+
+    private static int drainAll(MulticloudDbClient client,
+                                ResourceAddress address,
+                                List<ChangeFeedCursor> initial,
+                                AtomicBoolean writerDone) throws InterruptedException {
+        AtomicInteger total = new AtomicInteger(0);
+        CountDownLatch allDone = new CountDownLatch(initial.size());
+        List<Thread> consumers = new ArrayList<>(initial.size());
+
+        for (int i = 0; i < initial.size(); i++) {
+            final int cursorIndex = i;
+            final ChangeFeedCursor startCursor = initial.get(i);
+            Thread consumer = new Thread(() -> {
+                ChangeFeedCursor cursor = startCursor;
+                long deadline = System.currentTimeMillis() + 30_000L;
+                try {
+                    while (System.currentTimeMillis() < deadline) {
+                        ChangeFeedPage page = client.readChanges(address, cursor);
+                        for (ChangeEvent ev : page.events()) {
+                            System.out.printf("  [cursor-%d] %-6s %s @ %s%n",
+                                    cursorIndex, ev.type(), ev.key(), ev.commitTimestamp());
+                            total.incrementAndGet();
+                        }
+                        cursor = page.nextCursor();
+                        if (writerDone.get() && !page.hasMore()) {
+                            break;
+                        }
+                        if (!page.hasMore()) {
+                            Thread.sleep(250);
+                        }
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    allDone.countDown();
+                }
+            }, "cursor-consumer-" + cursorIndex);
+            consumer.setDaemon(true);
+            consumers.add(consumer);
+            consumer.start();
+        }
+
+        System.out.println("  Started " + consumers.size() + " parallel consumer thread(s).");
+        allDone.await();
+        return total.get();
     }
 }

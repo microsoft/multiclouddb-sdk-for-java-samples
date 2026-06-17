@@ -127,13 +127,18 @@ final class ChangeFeedSampleSupport {
     static void enableDynamoStreams(ConfigLoader.AppConfig appConfig, String tableName) {
         String endpoint = appConfig.sdk().connection().get("endpoint");
         String region = appConfig.sdk().connection().getOrDefault("region", "us-east-1");
-        String accessKey = appConfig.property("multiclouddb.auth.accessKeyId", "fakeMyKeyId");
-        String secretKey = appConfig.property("multiclouddb.auth.secretAccessKey", "fakeSecretAccessKey");
+        String accessKey = appConfig.property("multiclouddb.auth.accessKeyId", null);
+        String secretKey = appConfig.property("multiclouddb.auth.secretAccessKey", null);
 
         var builder = DynamoDbClient.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKey, secretKey)));
+                .region(Region.of(region));
+
+        // Use explicit credentials only if provided (DynamoDB Local);
+        // otherwise fall back to the default AWS credential chain (cloud).
+        if (accessKey != null && secretKey != null) {
+            builder.credentialsProvider(StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(accessKey, secretKey)));
+        }
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));
         }
