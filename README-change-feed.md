@@ -438,7 +438,15 @@ docker run --rm -p 8000:8000 amazon/dynamodb-local
 > Windows](https://docs.docker.com/desktop/install/windows-install/) or
 > [Podman](https://podman.io/), or download the standalone DynamoDB Local
 > tarball from the [AWS docs](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html)
-> and run `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb`.
+> and run:
+> ```bash
+> # bash
+> java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
+> ```
+> ```powershell
+> # PowerShell — quote the -D argument to prevent mangling
+> java "-Djava.library.path=./DynamoDBLocal_lib" -jar DynamoDBLocal.jar -sharedDb
+> ```
 > Again, **none of this is required for the build-time gate demo**.
 
 #### 2. No table creation required
@@ -554,7 +562,14 @@ docker run --rm -p 8000:8000 amazon/dynamodb-local
 > **No Docker?** Download the standalone DynamoDB Local tarball from the
 > [AWS docs](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html)
 > and run
-> `java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb`.
+> ```bash
+> # bash
+> java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
+> ```
+> ```powershell
+> # PowerShell — quote the -D argument to prevent mangling
+> java "-Djava.library.path=./DynamoDBLocal_lib" -jar DynamoDBLocal.jar -sharedDb
+> ```
 
 DynamoDB Streams must be enabled on the table. The SDK's `ensureContainer()`
 creates the table with `StreamSpecification(NEW_AND_OLD_IMAGES)` automatically.
