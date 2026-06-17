@@ -720,6 +720,8 @@ docker run --rm -p 9010:9010 -p 9020:9020 `
 The emulator needs an instance and database to be created before the sample
 can work. Use the `gcloud` CLI configured for the emulator:
 
+**macOS / Linux:**
+
 ```bash
 # Point gcloud at the emulator
 export SPANNER_EMULATOR_HOST=localhost:9010
@@ -737,8 +739,24 @@ gcloud spanner databases create multiclouddb-sdk-for-java-changefeed \
   --instance=test-instance
 ```
 
-> **Windows (PowerShell):** Replace `export` with `$env:SPANNER_EMULATOR_HOST = 'localhost:9010'`
-> and use backtick (`` ` ``) for line continuation.
+**Windows (PowerShell):**
+
+```powershell
+# Point gcloud at the emulator
+$env:SPANNER_EMULATOR_HOST = "localhost:9010"
+
+gcloud config configurations create emulator 2>$null
+gcloud config set auth/disable_credentials true
+gcloud config set project test-project
+gcloud config set api_endpoint_overrides/spanner http://localhost:9020/
+
+# Create instance and database
+gcloud spanner instances create test-instance `
+  --config=emulator-config --nodes=1 --description="Emulator instance"
+
+gcloud spanner databases create multiclouddb-sdk-for-java-changefeed `
+  --instance=test-instance
+```
 
 **macOS / Linux:**
 
