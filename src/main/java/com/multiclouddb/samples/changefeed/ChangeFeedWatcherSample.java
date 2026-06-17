@@ -19,6 +19,7 @@ import com.multiclouddb.api.changefeed.ChangeFeedPage;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -173,40 +174,63 @@ public class ChangeFeedWatcherSample {
             System.out.println("Press Ctrl+C to stop.");
             System.out.println();
 
-            // Graceful shutdown: Ctrl+C flips the flag AND interrupts the
-            // polling thread so a sleeping Thread.sleep returns immediately
-            // (otherwise we'd wait up to pollIntervalMs before exiting).
-            Thread mainThread = Thread.currentThread();
+            // === Multi-threaded consumption: one thread per cursor ===
+            // Each cursor (physical partition) gets its own polling thread.
+            // This pattern maximizes throughput by consuming all partitions
+            // in parallel — no partition blocks another. See SDK spec §5.
+            List<Thread> pollers = new ArrayList<>(cursors.size());
+            CountDownLatch started = new CountDownLatch(cursors.size());
+
+            for (int i = 0; i < cursors.size(); i++) {
+                final int cursorIndex = i;
+                final ChangeFeedCursor initialCursor = cursors.get(i);
+                Thread poller = new Thread(() -> {
+                    ChangeFeedCursor cursor = initialCursor;
+                    started.countDown();
+                    while (!shutdown.get()) {
+                        try {
+                            ChangeFeedPage page = client.readChanges(address, cursor);
+                            for (ChangeEvent ev : page.events()) {
+                                printEvent(ev, cursorIndex);
+                                totalEvents.incrementAndGet();
+                            }
+                            cursor = page.nextCursor();
+                            if (!page.hasMore() && !shutdown.get()) {
+                                Thread.sleep(pollIntervalMs);
+                            }
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        } catch (Exception ex) {
+                            System.err.println("  [cursor-" + cursorIndex + "] error: " + ex.getMessage());
+                            try { Thread.sleep(pollIntervalMs); } catch (InterruptedException ie) { break; }
+                        }
+                    }
+                }, "cursor-poller-" + cursorIndex);
+                poller.setDaemon(true);
+                pollers.add(poller);
+                poller.start();
+            }
+
+            // Wait for all poller threads to start
+            started.await();
+            System.out.println("Started " + pollers.size() + " parallel cursor poller(s).");
+            System.out.println();
+
+            // Graceful shutdown: Ctrl+C interrupts all poller threads
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 shutdown.set(true);
-                mainThread.interrupt();
+                for (Thread t : pollers) t.interrupt();
             }, "change-feed-watcher-shutdown"));
 
-            // Polling loop: round-robin across cursors. When every cursor
-            // reports caught-up, sleep for pollIntervalMs before retrying.
-            // The final tally is printed in the finally block below, on the
-            // main thread, so the count reflects every event the loop printed
-            // (printing it from the shutdown hook would race with the loop).
+            // Main thread waits for shutdown signal
             try {
-                while (!shutdown.get()) {
-                    boolean anyHasMore = false;
-                    for (int i = 0; i < cursors.size(); i++) {
-                        if (shutdown.get()) break;
-                        ChangeFeedPage page = client.readChanges(address, cursors.get(i));
-                        for (ChangeEvent ev : page.events()) {
-                            printEvent(ev, i);
-                            totalEvents.incrementAndGet();
-                        }
-                        cursors.set(i, page.nextCursor());
-                        if (page.hasMore()) anyHasMore = true;
-                    }
-                    if (!anyHasMore && !shutdown.get()) {
-                        Thread.sleep(pollIntervalMs);
-                    }
-                }
+                for (Thread t : pollers) t.join();
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
             } finally {
+                shutdown.set(true);
+                for (Thread t : pollers) t.interrupt();
                 System.out.println();
                 System.out.println("--- Stopping watcher ---");
                 System.out.println("Total events observed: " + totalEvents.get());

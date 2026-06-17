@@ -19,7 +19,9 @@ import com.multiclouddb.api.changefeed.ChangeFeedPage;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Portable change-feed sample demonstrating the SDK's pull-mode change-feed
@@ -245,38 +247,56 @@ public class ChangeFeedSample {
         }
     }
 
-    // ── Consumer loop ────────────────────────────────────────────────────────
+    // ── Consumer: one thread per cursor (parallel partition consumption) ────
 
-    /** Round-robin across cursors until the writer is done AND every cursor returns hasMore=false. */
+    /**
+     * Spawns one consumer thread per cursor. Each thread independently polls
+     * its partition until the writer signals done AND the cursor reports no
+     * more events. Returns total events consumed across all threads.
+     */
     private static int drainAll(MulticloudDbClient client,
                                 ResourceAddress address,
                                 List<ChangeFeedCursor> initial,
                                 AtomicBoolean writerDone) throws InterruptedException {
-        List<ChangeFeedCursor> cursors = new ArrayList<>(initial);
-        int total = 0;
-        long deadline = System.currentTimeMillis() + 30_000L; // hard safety bound
+        AtomicInteger total = new AtomicInteger(0);
+        CountDownLatch allDone = new CountDownLatch(initial.size());
+        List<Thread> consumers = new ArrayList<>(initial.size());
 
-        while (System.currentTimeMillis() < deadline) {
-            boolean anyHasMore = false;
-            for (int i = 0; i < cursors.size(); i++) {
-                ChangeFeedPage page = client.readChanges(address, cursors.get(i));
-                for (ChangeEvent ev : page.events()) {
-                    System.out.printf("  [consumer] cursor-%d  %-6s %s @ %s%n",
-                            i, ev.type(), ev.key(), ev.commitTimestamp());
-                    total++;
+        for (int i = 0; i < initial.size(); i++) {
+            final int cursorIndex = i;
+            final ChangeFeedCursor startCursor = initial.get(i);
+            Thread consumer = new Thread(() -> {
+                ChangeFeedCursor cursor = startCursor;
+                long deadline = System.currentTimeMillis() + 30_000L;
+                try {
+                    while (System.currentTimeMillis() < deadline) {
+                        ChangeFeedPage page = client.readChanges(address, cursor);
+                        for (ChangeEvent ev : page.events()) {
+                            System.out.printf("  [cursor-%d] %-6s %s @ %s%n",
+                                    cursorIndex, ev.type(), ev.key(), ev.commitTimestamp());
+                            total.incrementAndGet();
+                        }
+                        cursor = page.nextCursor();
+                        if (writerDone.get() && !page.hasMore()) {
+                            break;
+                        }
+                        if (!page.hasMore()) {
+                            Thread.sleep(250);
+                        }
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    allDone.countDown();
                 }
-                cursors.set(i, page.nextCursor());
-                if (page.hasMore()) anyHasMore = true;
-            }
-            if (writerDone.get() && !anyHasMore) {
-                // Writer is done and every cursor reports caught-up — drain complete.
-                return total;
-            }
-            if (!anyHasMore) {
-                Thread.sleep(250); // back off when at the live tip
-            }
+            }, "cursor-consumer-" + cursorIndex);
+            consumer.setDaemon(true);
+            consumers.add(consumer);
+            consumer.start();
         }
-        System.out.println("  [consumer] hit 30s safety deadline");
-        return total;
+
+        System.out.println("  Started " + consumers.size() + " parallel consumer thread(s).");
+        allDone.await();
+        return total.get();
     }
 }
