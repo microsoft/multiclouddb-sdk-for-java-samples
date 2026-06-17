@@ -349,6 +349,12 @@ Download and install from:\
 > docker run -p 8081:8081 -p 10250-10255:10250-10255 \
 >   mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
 > ```
+> **Docker** (Windows / PowerShell):
+> ```powershell
+> docker pull mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+> docker run -p 8081:8081 -p 10250-10255:10250-10255 `
+>   mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+> ```
 
 #### 2. Start the emulator
 
@@ -390,8 +396,17 @@ through the SDK's standard `emulatorHost` knob.
 
 #### 1. Start the emulator
 
+**macOS / Linux:**
+
 ```bash
 docker run --rm -p 9010:9010 -p 9020:9020 \
+  gcr.io/cloud-spanner-emulator/emulator
+```
+
+**Windows (PowerShell):**
+
+```powershell
+docker run --rm -p 9010:9010 -p 9020:9020 `
   gcr.io/cloud-spanner-emulator/emulator
 ```
 
@@ -688,8 +703,17 @@ delete items — events will appear within the poll interval.
 
 Start the Spanner emulator (requires Docker):
 
+**macOS / Linux:**
+
 ```bash
 docker run --rm -p 9010:9010 -p 9020:9020 \
+  gcr.io/cloud-spanner-emulator/emulator
+```
+
+**Windows (PowerShell):**
+
+```powershell
+docker run --rm -p 9010:9010 -p 9020:9020 `
   gcr.io/cloud-spanner-emulator/emulator
 ```
 
