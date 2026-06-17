@@ -124,6 +124,22 @@ public class ChangeFeedExtendedRetentionSample {
         ConfigLoader.AppConfig appConfig = ConfigLoader.load(DEFAULT_CONFIG);
         ProviderId provider = appConfig.sdk().provider();
 
+        // DEFAULT_CONFIG (change-feed-cosmos-cloud.properties) is git-ignored
+        // because it contains secrets. If it is missing, ConfigLoader proceeds
+        // with system properties only, which will lack connection info.
+        if (appConfig.sdk().connection().get("endpoint") == null
+                && appConfig.sdk().connection().get("region") == null) {
+            System.err.println("ERROR: No connection info found. This sample requires a live "
+                    + "cloud account (the emulator does not support extended retention).");
+            System.err.println();
+            System.err.println("Copy the template and fill in your credentials:");
+            System.err.println("  cp src/main/resources/change-feed-cosmos-cloud.properties.template \\");
+            System.err.println("     src/main/resources/change-feed-cosmos-cloud.properties");
+            System.err.println("Then rebuild: mvn clean package -DskipTests");
+            System.exit(2);
+            return;
+        }
+
         System.out.println("=== Multicloud DB Change Feed — Extended Retention Sample ===");
         System.out.println("Provider          : " + provider.displayName());
         System.out.println("Requested window  : " + REQUESTED_RETENTION + " (baseline is 24h)");

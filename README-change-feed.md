@@ -12,9 +12,9 @@ change feed** across Azure Cosmos DB, Google Cloud Spanner, and Amazon DynamoDB.
 | **`ChangeFeedExtendedRetentionSample`** (build-time gate) | ✅ Gate passes | ✅ Gate passes | ❌ Gate refuses (expected) |
 
 > **Provider-specific prerequisites.** All three providers declare
-> `Capability.CHANGE_FEED`, so the samples work on any of them. However,
-> each provider requires out-of-band setup before the change feed is
-> functional:
+> `Capability.CHANGE_FEED` (as of SDK 0.1.0-beta.2), so the samples work
+> on any of them. However, each provider requires out-of-band setup before
+> the change feed is functional:
 >
 > | Provider | Prerequisite |
 > |----------|-------------|
@@ -587,7 +587,8 @@ docker run --rm -p 8000:8000 amazon/dynamodb-local
 > ```
 
 DynamoDB Streams must be enabled on the table. The SDK's `ensureContainer()`
-creates the table with `StreamSpecification(NEW_AND_OLD_IMAGES)` automatically.
+does **not** enable streams automatically; the samples call
+`ChangeFeedSampleSupport.enableDynamoStreams(...)` as a workaround.
 
 **macOS / Linux:**
 
@@ -1353,8 +1354,9 @@ Or use any method from the [AWS credential provider chain](https://docs.aws.amaz
 
 #### Step 2 — Enable DynamoDB Streams on the table
 
-If you already have the table, enable streams. If not, the SDK's
-`ensureContainer()` creates the table with streams enabled automatically.
+If you already have the table, enable streams. If not, the samples'
+`enableDynamoStreams(...)` helper enables streams after `ensureContainer()`
+creates the table.
 
 To enable streams on an **existing** table:
 
@@ -1604,8 +1606,8 @@ aws dynamodb update-table --table-name change-feed-demo \
   --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
 ```
 
-Or let the SDK create the table from scratch — `ensureContainer()` creates
-tables with streams enabled.
+Or let the SDK create the table from scratch — the samples' `enableDynamoStreams(...)` helper
+enables streams after `ensureContainer()` creates the table.
 
 ### `UNSUPPORTED_CAPABILITY(stream_not_enabled)` on Spanner
 

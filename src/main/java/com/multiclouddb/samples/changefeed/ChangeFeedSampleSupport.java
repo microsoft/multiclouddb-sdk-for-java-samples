@@ -27,7 +27,8 @@ import java.net.URI;
 import java.time.Duration;
 
 /**
- * Helpers shared by {@link ChangeFeedSample} and {@link ChangeFeedWatcherSample}.
+ * Helpers shared by the change-feed samples ({@link ChangeFeedSample},
+ * {@link ChangeFeedWatcherSample}, and {@link ChangeFeedExtendedRetentionSample}).
  * <p>
  * The change-feed samples reach into provider-native SDKs directly for
  * provisioning workarounds:
@@ -105,11 +106,12 @@ final class ChangeFeedSampleSupport {
                 cosmos.getDatabase(database).createContainerIfNotExists(
                         props, ThroughputProperties.createManualThroughput(throughputRU));
                 System.out.println("  [provision] AVAD container '" + database + "/" + collection
-                        + "' ready (emulator retention=10min, throughput=" + throughputRU + " RU/s)");
+                        + "' ready (emulator retention=10min, throughput=" + throughputRU
+                        + " RU/s). Note: existing containers are not retrofitted.");
             } else {
                 cosmos.getDatabase(database).createContainerIfNotExists(props);
                 System.out.println("  [provision] AVAD container '" + database + "/" + collection
-                        + "' ready (emulator retention=10min)");
+                        + "' ready (emulator retention=10min). Note: existing containers are not retrofitted.");
             }
         }
     }

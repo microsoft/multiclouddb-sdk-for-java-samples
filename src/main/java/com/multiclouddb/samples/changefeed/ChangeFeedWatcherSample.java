@@ -242,7 +242,8 @@ public class ChangeFeedWatcherSample {
      * Parse the poll interval from the {@code changefeed.poll.intervalMs}
      * system property. Falls back to {@link #DEFAULT_POLL_INTERVAL_MS} when
      * the property is missing or unparseable, and clamps to a minimum of 1 ms
-     * because {@link Thread#sleep(long)} rejects values {@code < 0}.
+     * to avoid a 0 ms busy-loop ({@link Thread#sleep(long)} accepts 0 but
+     * that would spin the CPU wastefully).
      */
     static long parsePollIntervalMs(String raw) {
         if (raw == null || raw.isBlank()) return DEFAULT_POLL_INTERVAL_MS;

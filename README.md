@@ -324,9 +324,9 @@ Press Ctrl+C to stop.
 | `change-feed-cosmos.properties` | Cosmos DB emulator (data-plane samples + extended-retention build-time gate) |
 | `change-feed-cosmos-cloud.properties.template` | Cosmos DB (cloud) — copy to `src/main/resources/change-feed-cosmos-cloud.properties` (gitignored), then fill in endpoint + key |
 | `change-feed-spanner.properties` | Google Cloud Spanner emulator (extended-retention build-time gate demo) |
-| `change-feed-spanner-cloud.properties.template` | Google Cloud Spanner (cloud) — copy to `change-feed-spanner-cloud.properties` (gitignored), then fill in project + instance + database |
+| `change-feed-spanner-cloud.properties.template` | Google Cloud Spanner (cloud) — copy to `src/main/resources/change-feed-spanner-cloud.properties` (gitignored), then fill in project + instance + database |
 | `change-feed-dynamo.properties` | Amazon DynamoDB Local (extended-retention build-time gate demo — gate refuses before any wire I/O) |
-| `change-feed-dynamo-cloud.properties.template` | Amazon DynamoDB (cloud) — copy to `change-feed-dynamo-cloud.properties` (gitignored), then fill in region |
+| `change-feed-dynamo-cloud.properties.template` | Amazon DynamoDB (cloud) — copy to `src/main/resources/change-feed-dynamo-cloud.properties` (gitignored), then fill in region |
 
 ---
 
