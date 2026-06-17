@@ -602,10 +602,46 @@ java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
-For the watcher, open the DynamoDB Local shell at
-`http://localhost:8000/shell/` (or use the AWS CLI) and create / update /
-delete items in the `change-feed-demo` table — events will appear in the
-watcher terminal.
+For the watcher, add / update / delete items in the `local__change-feed-demo`
+table using one of these methods:
+
+**Option 1 — NoSQL Workbench (visual UI, recommended):**
+
+Download [NoSQL Workbench](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/workbench.settingup.html)
+(free from AWS). Open it → **Operation Builder** → **Add connection** →
+select **DynamoDB Local** → set endpoint to `http://localhost:8000`. You can
+then browse tables, add / edit / delete items visually — similar to the
+Cosmos DB Data Explorer experience.
+
+**Option 2 — AWS CLI:**
+
+```powershell
+# Add an item
+aws dynamodb put-item --endpoint-url http://localhost:8000 --region us-east-1 `
+  --table-name "local__change-feed-demo" `
+  --item '{"partitionKey":{"S":"pk1"},"sortKey":{"S":"sk1"},"title":{"S":"hello"}}'
+
+# Update an item
+aws dynamodb update-item --endpoint-url http://localhost:8000 --region us-east-1 `
+  --table-name "local__change-feed-demo" `
+  --key '{"partitionKey":{"S":"pk1"},"sortKey":{"S":"sk1"}}' `
+  --update-expression "SET title = :t" `
+  --expression-attribute-values '{":t":{"S":"updated"}}'
+
+# Delete an item
+aws dynamodb delete-item --endpoint-url http://localhost:8000 --region us-east-1 `
+  --table-name "local__change-feed-demo" `
+  --key '{"partitionKey":{"S":"pk1"},"sortKey":{"S":"sk1"}}'
+
+# List all items
+aws dynamodb scan --endpoint-url http://localhost:8000 --region us-east-1 `
+  --table-name "local__change-feed-demo"
+```
+
+**Option 3 — DynamoDB Local web shell:**
+
+Open `http://localhost:8000/shell/` in your browser — a JavaScript console
+where you can run DynamoDB API calls interactively.
 
 ### Run against DynamoDB (AWS Cloud)
 
