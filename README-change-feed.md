@@ -3,21 +3,18 @@
 Command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
 change feed** on Azure Cosmos DB.
 
-> **Note:** DynamoDB and Spanner change-feed support is not yet available.
-> These samples currently target Cosmos DB only.
+## Samples
 
-## Provider Support Matrix
-
-| Sample | Azure Cosmos DB | Google Cloud Spanner | Amazon DynamoDB |
-|--------|:---------------:|:--------------------:|:---------------:|
-| **`ChangeFeedSample`** (one-shot) | ✅ Supported | ⏳ Not yet supported | ⏳ Not yet supported |
-| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported | ⏳ Not yet supported | ⏳ Not yet supported |
-| **`ChangeFeedExtendedRetentionSample`** (build-time gate) | ✅ Gate passes | ⏳ Not yet supported | ⏳ Not yet supported |
+| Sample | Description |
+|--------|-------------|
+| **`ChangeFeedSample`** (one-shot) | ✅ Supported |
+| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported |
+| **`ChangeFeedExtendedRetentionSample`** (extended retention) | ✅ Supported |
 
 > **Provider-specific prerequisites (Cosmos DB).**
 >
-> | Provider | Prerequisite |
-> |----------|-------------|
+> | Environment | Prerequisite |
+> |-------------|-------------|
 > | **Cosmos DB (live)** | Account must have **Continuous Backup** enabled (AVAD is then automatic on every container). |
 > | **Cosmos DB (emulator)** | The sample auto-provisions an AVAD container with a 10-min retention policy (no manual setup). |
 >
@@ -44,13 +41,11 @@ the Todo App or Risk Platform samples.
 > templates stay at the resources root (`src/main/resources/change-feed-*.properties[.template]`)
 > because `ConfigLoader` reads them by classpath name.
 
-### Configuration files per provider
+### Configuration files
 
 | Provider | Emulator / Local config (shipped) | Cloud config (template → copy + fill in) |
 |----------|-----------------------------------|------------------------------------------|
 | **Cosmos DB** | `change-feed-cosmos.properties` | `change-feed-cosmos-cloud.properties.template` |
-| **Spanner** | `change-feed-spanner.properties` | `change-feed-spanner-cloud.properties.template` |
-| **DynamoDB** | `change-feed-dynamo.properties` | `change-feed-dynamo-cloud.properties.template` |
 
 > Emulator/local configs work out of the box for the extended-retention
 > sample (no credentials needed — the gate runs before any wire I/O).
@@ -66,16 +61,10 @@ the Todo App or Risk Platform samples.
 3. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
 4. [Emulator Setup](#emulator-setup)
    - [Cosmos DB Emulator](#cosmos-db-emulator)
-   - [Spanner Emulator](#spanner-emulator)
-   - [DynamoDB Local](#dynamodb-local)
 5. [Running the Samples](#running-the-samples)
    - [Build the fat jar](#build-the-fat-jar)
    - [Against the Cosmos DB Emulator](#run-against-the-cosmos-db-emulator)
    - [Against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud)
-   - [Against DynamoDB Local](#run-against-dynamodb-local)
-   - [Against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud)
-   - [Against the Spanner Emulator](#run-against-the-spanner-emulator)
-   - [Against Spanner (Google Cloud)](#run-against-spanner-google-cloud)
    - [Tuning the watcher poll interval](#tuning-the-watcher-poll-interval)
 6. [Example Output](#example-output)
    - [`ChangeFeedSample` (one-shot)](#changefeedsample-one-shot)
@@ -87,8 +76,6 @@ the Todo App or Risk Platform samples.
 8. [Configuration Reference](#configuration-reference)
 9. [Cloud Setup](#cloud-setup)
    - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
-   - [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
-   - [Spanner Cloud Setup](#spanner-cloud-setup)
 10. [Troubleshooting](#troubleshooting)
 
 ---
@@ -101,9 +88,6 @@ the Todo App or Risk Platform samples.
 | Maven | 3.9+   | Build tool |
 | Azure Cosmos DB Emulator **or** an Azure Cosmos DB account | latest | For Cosmos samples; live accounts must have Continuous Backup enabled (see below) |
 | Azure CLI | optional | Only needed if you provision the live Cosmos account from the command line |
-| Docker | optional | Needed for DynamoDB Local (`amazon/dynamodb-local`) and Spanner emulator (`gcr.io/cloud-spanner-emulator/emulator`) |
-| AWS CLI | optional | Only needed if you provision DynamoDB tables from the command line or use the default credential chain |
-| Google Cloud CLI (`gcloud`) | optional | Only needed if you provision Spanner instances from the command line or use Application Default Credentials |
 
 Make sure `JAVA_HOME` points to JDK 17 and is on your `PATH`:
 
@@ -386,97 +370,6 @@ the emulator certificate into your JDK truststore (see the
 [Todo App README](README-todo-app.md#5-ssl-certificate-trust) for a detailed
 walk-through that applies here too).
 
-### Spanner Emulator
-
-The Cloud Spanner emulator provides a free local instance of Spanner for
-development and testing. `ChangeFeedExtendedRetentionSample` connects to it
-through the SDK's standard `emulatorHost` knob.
-
-#### 1. Start the emulator
-
-**macOS / Linux:**
-
-```bash
-docker run --rm -p 9010:9010 -p 9020:9020 \
-  gcr.io/cloud-spanner-emulator/emulator
-```
-
-**Windows (PowerShell):**
-
-```powershell
-docker run --rm -p 9010:9010 -p 9020:9020 `
-  gcr.io/cloud-spanner-emulator/emulator
-```
-
-#### 2. No instance / database creation required
-
-`ChangeFeedExtendedRetentionSample` stops at the build-time gate; it does not
-issue DDL or DML. The shipped config (`change-feed-spanner.properties`) uses
-placeholder values (`projectId=test-project`, `instanceId=test-instance`,
-`databaseId=multiclouddb-sdk-for-java-changefeed`) that work as-is for the
-build-time gate demo. If you extend the sample to issue real reads / writes,
-follow the [Spanner emulator
-docs](https://cloud.google.com/spanner/docs/emulator#create-instance) to
-create an instance and database first.
-
-#### 3. Emulator connection details (already in `change-feed-spanner.properties`)
-
-| Property | Value |
-|----------|-------|
-| Project ID | `test-project` |
-| Instance ID | `test-instance` |
-| Database ID | `multiclouddb-sdk-for-java-changefeed` |
-| Emulator host | `localhost:9010` |
-
-### DynamoDB Local
-
-`ChangeFeedExtendedRetentionSample` against DynamoDB **refuses to build the
-client at all** — the build-time capability gate fails with
-`UNSUPPORTED_CAPABILITY(extended_retention_unavailable)` before any wire I/O
-is issued. The endpoint is never contacted, so **you do not need to start
-DynamoDB Local** (or have Docker installed at all) for the build-time-gate
-demo. Just run the sample against the shipped `change-feed-dynamo.properties`
-config and you will see the expected `exit 1` refusal.
-
-If you do want a running DynamoDB Local endpoint (for example, to extend the
-sample later to issue real reads / writes):
-
-#### 1. Start DynamoDB Local (optional)
-
-```bash
-docker run --rm -p 8000:8000 amazon/dynamodb-local
-```
-
-> **No Docker?** Either install [Docker Desktop for
-> Windows](https://docs.docker.com/desktop/install/windows-install/) or
-> [Podman](https://podman.io/), or download the standalone DynamoDB Local
-> tarball from the [AWS docs](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html)
-> and run:
-> ```bash
-> # bash
-> java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
-> ```
-> ```powershell
-> # PowerShell — quote the -D argument to prevent mangling
-> java "-Djava.library.path=./DynamoDBLocal_lib" -jar DynamoDBLocal.jar -sharedDb
-> ```
-> Again, **none of this is required for the build-time gate demo**.
-
-#### 2. No table creation required
-
-The sample never issues any DynamoDB API call — it stops at the SDK's
-build-time capability gate. So even if you do start DynamoDB Local, you
-don't need to create a table for the gate demo.
-
-#### 3. Emulator connection details (already in `change-feed-dynamo.properties`)
-
-| Property | Value |
-|----------|-------|
-| Endpoint | `http://localhost:8000` |
-| Region | `us-east-1` |
-| Access key | `fakeMyKeyId` (DynamoDB Local accepts anything) |
-| Secret key | `fakeSecretAccessKey` |
-
 ---
 
 ## Running the Samples
@@ -563,269 +456,6 @@ java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
-
-### Run against DynamoDB Local
-
-Start DynamoDB Local (requires Docker):
-
-```bash
-docker run --rm -p 8000:8000 amazon/dynamodb-local
-```
-
-> **No Docker?** Download the standalone DynamoDB Local tarball from the
-> [AWS docs](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html)
-> and run
-> ```bash
-> # bash
-> java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -sharedDb
-> ```
-> ```powershell
-> # PowerShell — quote the -D argument to prevent mangling
-> java "-Djava.library.path=./DynamoDBLocal_lib" -jar DynamoDBLocal.jar -sharedDb
-> ```
-
-DynamoDB Streams must be enabled on the table. The SDK's `ensureContainer()`
-does **not** enable streams automatically; the samples call
-`ChangeFeedSampleSupport.enableDynamoStreams(...)` as a workaround.
-
-**macOS / Linux:**
-
-```bash
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-dynamo.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-dynamo.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-For the watcher, add / update / delete items in the `local__change-feed-demo`
-table using one of these methods:
-
-**Option 1 — NoSQL Workbench (visual UI, recommended):**
-
-Download [NoSQL Workbench](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/workbench.settingup.html)
-(free from AWS). Open it → **Operation Builder** → **Add connection** →
-select **DynamoDB Local** → set endpoint to `http://localhost:8000`. You can
-then browse tables, add / edit / delete items visually — similar to the
-Cosmos DB Data Explorer experience.
-
-**Option 2 — AWS CLI:**
-
-```powershell
-# Add an item
-aws dynamodb put-item --endpoint-url http://localhost:8000 --region us-east-1 `
-  --table-name "local__change-feed-demo" `
-  --item '{"partitionKey":{"S":"pk1"},"sortKey":{"S":"sk1"},"title":{"S":"hello"}}'
-
-# Update an item
-aws dynamodb update-item --endpoint-url http://localhost:8000 --region us-east-1 `
-  --table-name "local__change-feed-demo" `
-  --key '{"partitionKey":{"S":"pk1"},"sortKey":{"S":"sk1"}}' `
-  --update-expression "SET title = :t" `
-  --expression-attribute-values '{":t":{"S":"updated"}}'
-
-# Delete an item
-aws dynamodb delete-item --endpoint-url http://localhost:8000 --region us-east-1 `
-  --table-name "local__change-feed-demo" `
-  --key '{"partitionKey":{"S":"pk1"},"sortKey":{"S":"sk1"}}'
-
-# List all items
-aws dynamodb scan --endpoint-url http://localhost:8000 --region us-east-1 `
-  --table-name "local__change-feed-demo"
-```
-
-**Option 3 — DynamoDB Local web shell:**
-
-Open `http://localhost:8000/shell/` in your browser — a JavaScript console
-where you can run DynamoDB API calls interactively.
-
-### Run against DynamoDB (AWS Cloud)
-
-> **First time?** Complete the [DynamoDB Cloud Setup](#dynamodb-cloud-setup) below
-> to create your properties file and ensure your table has DynamoDB Streams enabled.
-
-**macOS / Linux:**
-
-```bash
-mvn package -DskipTests
-
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-mvn package -DskipTests
-
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-For the watcher, open the [DynamoDB console](https://console.aws.amazon.com/dynamodb)
-→ **Tables** → `change-feed-demo` → **Explore table items** and create / edit /
-delete items — events will appear within the poll interval.
-
-### Run against the Spanner Emulator
-
-Start the Spanner emulator (requires Docker):
-
-**macOS / Linux:**
-
-```bash
-docker run --rm -p 9010:9010 -p 9020:9020 \
-  gcr.io/cloud-spanner-emulator/emulator
-```
-
-**Windows (PowerShell):**
-
-```powershell
-docker run --rm -p 9010:9010 -p 9020:9020 `
-  gcr.io/cloud-spanner-emulator/emulator
-```
-
-The emulator needs an instance and database to be created before the sample
-can work. Use the `gcloud` CLI configured for the emulator:
-
-**macOS / Linux:**
-
-```bash
-# Point gcloud at the emulator
-export SPANNER_EMULATOR_HOST=localhost:9010
-
-gcloud config configurations create emulator 2>/dev/null || true
-gcloud config set auth/disable_credentials true
-gcloud config set project test-project
-gcloud config set api_endpoint_overrides/spanner http://localhost:9020/
-
-# Create instance and database
-gcloud spanner instances create test-instance \
-  --config=emulator-config --nodes=1 --description="Emulator instance"
-
-gcloud spanner databases create multiclouddb-sdk-for-java-changefeed \
-  --instance=test-instance
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# Point gcloud at the emulator
-$env:SPANNER_EMULATOR_HOST = "localhost:9010"
-
-gcloud config configurations create emulator 2>$null
-gcloud config set auth/disable_credentials true
-gcloud config set project test-project
-gcloud config set api_endpoint_overrides/spanner http://localhost:9020/
-
-# Create instance and database
-gcloud spanner instances create test-instance `
-  --config=emulator-config --nodes=1 --description="Emulator instance"
-
-gcloud spanner databases create multiclouddb-sdk-for-java-changefeed `
-  --instance=test-instance
-```
-
-**macOS / Linux:**
-
-```bash
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-spanner.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-spanner.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-spanner.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-spanner.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-### Run against Spanner (Google Cloud)
-
-> **First time?** Complete the [Spanner Cloud Setup](#spanner-cloud-setup) below
-> to create your properties file, Spanner instance, and change stream.
-
-**macOS / Linux:**
-
-```bash
-mvn package -DskipTests
-
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-mvn package -DskipTests
-
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-For the watcher, open the
-[Spanner console](https://console.cloud.google.com/spanner) → your instance →
-database → table, and create / edit / delete rows — events will appear
-within the poll interval.
 
 ### Tuning the watcher poll interval
 
@@ -1004,9 +634,7 @@ multiclouddb.changefeed.retentionDays=7
 
 | Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
 |----------|---------------------------------------------|--------------------------|
-| **Azure Cosmos DB** | Supported | Builds client with extended retention, provisions container, runs data-plane reads. |
-| **Google Cloud Spanner** | ⏳ Not yet supported | Change-feed support for Spanner is not yet available. |
-| **AWS DynamoDB** | ⏳ Not yet supported | Change-feed support for DynamoDB is not yet available. |
+| **Azure Cosmos DB** | Supported | Builds client with extended retention, provisions container, runs data-plane reads with cursor persistence. |
 
 > **This sample performs a full data-plane round-trip** — it provisions a
 > container, writes test items, and consumes change events using
@@ -1084,26 +712,6 @@ ChangeFeedWatcherSample for the 24h-baseline data-plane demo.
 === Sample complete ===
 ```
 
-**DynamoDB (refused, exit code 1):**
-
-```
-=== Multicloud DB Change Feed — Extended Retention Sample ===
-Provider          : AWS DynamoDB
-Requested window  : PT168H (baseline is 24h)
-
---- Building client with extendedRetention(PT168H) ---
-
---- Build-time gate REFUSED extended retention ---
-  Provider : AWS DynamoDB
-  Category : UNSUPPORTED_CAPABILITY
-  Message  : Provider dynamo does not support Capability.EXTENDED_CHANGE_FEED_HISTORY — extended change-feed retention (requested PT168H) is unavailable on this provider. ...
-  Details  : {reason=extended_retention_unavailable, capability=extended_change_feed_history, requestedRetention=PT168H}
-
-This is the expected outcome on providers that do not declare
-Capability.EXTENDED_CHANGE_FEED_HISTORY (e.g. AWS DynamoDB, whose Streams
-retention is fixed at 24h server-side).
-```
-
 ---
 
 ## Configuration Reference
@@ -1114,44 +722,27 @@ the same set of keys from the properties file pointed to by
 
 | Key | Required? | Default | Notes |
 |-----|-----------|---------|-------|
-| `multiclouddb.provider` | yes | — | `cosmos`, `dynamo`, or `spanner`. |
-| `multiclouddb.connection.endpoint` | yes (Cosmos, DynamoDB) | — | Cosmos: `https://localhost:8081` or `https://<account>.documents.azure.com:443/`. DynamoDB: `http://localhost:8000` (local) or omit for AWS cloud. |
-| `multiclouddb.connection.key` | yes (Cosmos) | — | Cosmos primary master key. |
-| `multiclouddb.connection.connectionMode` | no (Cosmos) | `direct` | Set to `gateway` for the emulator; `direct` works for live accounts. |
-| `multiclouddb.connection.region` | yes (DynamoDB) | — | AWS region (e.g. `us-east-1`). |
-| `multiclouddb.auth.accessKeyId` | yes (DynamoDB Local) | — | Any value for DynamoDB Local; on AWS cloud the SDK uses the default credential chain. |
-| `multiclouddb.auth.secretAccessKey` | yes (DynamoDB Local) | — | Any value for DynamoDB Local; on AWS cloud the SDK uses the default credential chain. |
-| `multiclouddb.connection.projectId` | yes (Spanner) | — | Google Cloud project ID. |
-| `multiclouddb.connection.instanceId` | yes (Spanner) | — | Spanner instance ID. |
-| `multiclouddb.connection.databaseId` | yes (Spanner) | — | Spanner database ID. |
-| `multiclouddb.connection.emulatorHost` | no (Spanner) | — | Set to `localhost:9010` for the emulator; omit for cloud. |
+| `multiclouddb.provider` | yes | — | `cosmos` |
+| `multiclouddb.connection.endpoint` | yes | — | `https://localhost:8081` (emulator) or `https://<account>.documents.azure.com:443/` (cloud) |
+| `multiclouddb.connection.key` | yes | — | Cosmos primary master key. |
+| `multiclouddb.connection.connectionMode` | no | `direct` | Set to `gateway` for the emulator; `direct` works for live accounts. |
 | `multiclouddb.database` | no | `multiclouddb-sdk-for-java-changefeed` | Logical database name. |
-| `multiclouddb.collection` | no | `change-feed-demo` | Container / table name. |
-
-`ChangeFeedExtendedRetentionSample` accepts any of the three providers.
-See each provider's `change-feed-<provider>-cloud.properties.template` for
-the full key list.
+| `multiclouddb.collection` | no | `change-feed-demo` | Container name. |
 
 System properties (passed via `-D` on the `java` command line):
 
 | Property | Sample | Default | Notes |
 |----------|--------|---------|-------|
-| `multiclouddb.config` | all | `change-feed-cosmos.properties` (data-plane samples) / `change-feed-cosmos-cloud.properties` (`ChangeFeedExtendedRetentionSample`) | Classpath name of the properties file. |
+| `multiclouddb.config` | all | `change-feed-cosmos.properties` | Classpath name of the properties file. |
 | `changefeed.poll.intervalMs` | `ChangeFeedWatcherSample` | `1000` | Polling cadence in milliseconds (minimum `1`). |
 
 Shipped properties files:
 
-| File | Provider | Tracked in git? |
-|------|----------|------------------|
+| File | Environment | Tracked in git? |
+|------|-------------|------------------|
 | `src/main/resources/change-feed-cosmos.properties` | Cosmos emulator | yes |
 | `src/main/resources/change-feed-cosmos-cloud.properties.template` | Cosmos cloud (template — copy and fill in) | yes |
-| `src/main/resources/change-feed-cosmos-cloud.properties` | Cosmos cloud (your real endpoint + key) | **no** (gitignored — see [`.gitignore`](.gitignore)) |
-| `src/main/resources/change-feed-spanner.properties` | Spanner emulator (build-time gate demo) | yes |
-| `src/main/resources/change-feed-spanner-cloud.properties.template` | Spanner cloud (template — copy and fill in) | yes |
-| `src/main/resources/change-feed-spanner-cloud.properties` | Spanner cloud (your real project + instance + database) | **no** (gitignored) |
-| `src/main/resources/change-feed-dynamo.properties` | DynamoDB Local (build-time gate demo) | yes |
-| `src/main/resources/change-feed-dynamo-cloud.properties.template` | DynamoDB cloud (template — copy and fill in) | yes |
-| `src/main/resources/change-feed-dynamo-cloud.properties` | DynamoDB cloud (your real region) | **no** (gitignored) |
+| `src/main/resources/change-feed-cosmos-cloud.properties` | Cosmos cloud (your real endpoint + key) | **no** (gitignored) |
 
 ---
 
@@ -1331,213 +922,6 @@ az cosmosdb delete \
 
 ---
 
-### DynamoDB Cloud Setup
-
-#### Step 1 — Configure AWS credentials
-
-Ensure the AWS CLI is configured with credentials that have DynamoDB access:
-
-```bash
-aws configure
-# Enter your Access Key ID, Secret Access Key, default region, and output format.
-```
-
-Or use any method from the [AWS credential provider chain](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/credentials-chain.html)
-(environment variables, IAM role, SSO, etc.).
-
-#### Step 2 — Enable DynamoDB Streams on the table
-
-If you already have the table, enable streams. If not, the samples'
-`enableDynamoStreams(...)` helper enables streams after `ensureContainer()`
-creates the table.
-
-To enable streams on an **existing** table:
-
-**macOS / Linux:**
-
-```bash
-aws dynamodb update-table \
-  --table-name change-feed-demo \
-  --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES \
-  --region us-east-1
-```
-
-**Windows (PowerShell):**
-
-```powershell
-aws dynamodb update-table `
-  --table-name change-feed-demo `
-  --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES `
-  --region us-east-1
-```
-
-Verify streams are enabled:
-
-```bash
-aws dynamodb describe-table --table-name change-feed-demo \
-  --query "Table.StreamSpecification" --region us-east-1
-# Expected: {"StreamEnabled": true, "StreamViewType": "NEW_AND_OLD_IMAGES"}
-```
-
-#### Step 3 — Create the properties file
-
-The cloud properties file is **git-ignored** and must never be committed.
-
-**macOS / Linux:**
-
-```bash
-AWS_REGION=$(aws configure get region)
-
-cat > src/main/resources/change-feed-dynamo-cloud.properties << EOF
-multiclouddb.provider=dynamo
-multiclouddb.connection.region=$AWS_REGION
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-EOF
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$AWS_REGION = (aws configure get region)
-
-@"
-multiclouddb.provider=dynamo
-multiclouddb.connection.region=$AWS_REGION
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-"@ | Set-Content src\main\resources\change-feed-dynamo-cloud.properties
-```
-
-> **No endpoint needed** — when `multiclouddb.connection.endpoint` is absent,
-> the SDK connects to the real AWS DynamoDB service using the default credential
-> chain.
-
-#### Step 4 — Build and run
-
-```bash
-mvn package -DskipTests
-
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-```
-
-#### Step 5 — Clean up DynamoDB resources (optional)
-
-```bash
-aws dynamodb delete-table --table-name change-feed-demo --region us-east-1
-```
-
----
-
-### Spanner Cloud Setup
-
-#### Step 1 — Authenticate with Google Cloud
-
-```bash
-gcloud auth application-default login
-gcloud config set project <YOUR-GCP-PROJECT-ID>
-```
-
-#### Step 2 — Create a Spanner instance (if needed)
-
-```bash
-gcloud spanner instances create multiclouddb-sample \
-  --config=regional-us-central1 \
-  --nodes=1 \
-  --description="Multicloud DB SDK samples"
-```
-
-#### Step 3 — Create the database and change stream
-
-The change feed requires a **change stream** to be created on the target table.
-Create the database with the table and change stream in a single DDL batch:
-
-```bash
-gcloud spanner databases create multiclouddb-sdk-for-java-changefeed \
-  --instance=multiclouddb-sample \
-  --ddl="CREATE TABLE \`change-feed-demo\` (
-           partitionKey STRING(256) NOT NULL,
-           sortKey STRING(256) NOT NULL,
-           title STRING(1024),
-         ) PRIMARY KEY (partitionKey, sortKey)" \
-  --ddl="CREATE CHANGE STREAM ChangeFeedStream
-           FOR \`change-feed-demo\`
-           OPTIONS (value_capture_type = 'NEW_ROW')"
-```
-
-Verify the change stream exists:
-
-```bash
-gcloud spanner databases ddl describe multiclouddb-sdk-for-java-changefeed \
-  --instance=multiclouddb-sample
-```
-
-#### Step 4 — Create the properties file
-
-The cloud properties file is **git-ignored** and must never be committed.
-
-**macOS / Linux:**
-
-```bash
-GCP_PROJECT=$(gcloud config get-value project)
-
-cat > src/main/resources/change-feed-spanner-cloud.properties << EOF
-multiclouddb.provider=spanner
-multiclouddb.connection.projectId=$GCP_PROJECT
-multiclouddb.connection.instanceId=multiclouddb-sample
-multiclouddb.connection.databaseId=multiclouddb-sdk-for-java-changefeed
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-EOF
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$GCP_PROJECT = (gcloud config get-value project)
-
-@"
-multiclouddb.provider=spanner
-multiclouddb.connection.projectId=$GCP_PROJECT
-multiclouddb.connection.instanceId=multiclouddb-sample
-multiclouddb.connection.databaseId=multiclouddb-sdk-for-java-changefeed
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-"@ | Set-Content src\main\resources\change-feed-spanner-cloud.properties
-```
-
-> **No `emulatorHost`** — when the property is absent, the SDK connects to real
-> Google Cloud Spanner using Application Default Credentials (ADC).
-
-#### Step 5 — Build and run
-
-```bash
-mvn package -DskipTests
-
-java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-```
-
-#### Step 6 — Clean up Spanner resources (optional)
-
-Drop the database:
-
-```bash
-gcloud spanner databases delete multiclouddb-sdk-for-java-changefeed \
-  --instance=multiclouddb-sample --quiet
-```
-
-Or delete the entire Spanner instance:
-
-```bash
-gcloud spanner instances delete multiclouddb-sample --quiet
-```
-
----
-
 ## Troubleshooting
 
 ### `BadRequest: The retention duration in the Change Feed policy should not be set when continuous backup mode is enabled`
@@ -1589,51 +973,3 @@ You likely have a stale `.mvn/maven.config` left over from local SDK testing.
 Either delete `.mvn/maven.config` (defaults will resolve `0.1.0-beta.1` from
 Maven Central) or update the override to a version actually installed in your
 `~/.m2`. See [`../README.md#sdk-version`](README.md#sdk-version).
-
-### `UNSUPPORTED_CAPABILITY(stream_not_enabled)` on DynamoDB
-
-DynamoDB Streams is not enabled on the table. Enable it:
-
-```bash
-aws dynamodb update-table --table-name change-feed-demo \
-  --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
-```
-
-Or let the SDK create the table from scratch — the samples' `enableDynamoStreams(...)` helper
-enables streams after `ensureContainer()` creates the table.
-
-### `UNSUPPORTED_CAPABILITY(stream_not_enabled)` on Spanner
-
-No change stream is configured for the target table. Create one:
-
-```bash
-gcloud spanner databases ddl update multiclouddb-sdk-for-java-changefeed \
-  --instance=<instance-id> \
-  --ddl="CREATE CHANGE STREAM ChangeFeedStream FOR \`change-feed-demo\` OPTIONS (value_capture_type = 'NEW_ROW')"
-```
-
-### `UNAVAILABLE` or `DEADLINE_EXCEEDED` against the Spanner emulator
-
-The Spanner emulator is not running, or the ports don't match. Confirm the
-emulator is running on `localhost:9010` (gRPC) and `localhost:9020` (REST):
-
-```bash
-docker run --rm -p 9010:9010 -p 9020:9020 gcr.io/cloud-spanner-emulator/emulator
-```
-
-Also confirm `multiclouddb.connection.emulatorHost=localhost:9010` is set in
-your properties file.
-
-### `Unable to load credentials` on DynamoDB cloud
-
-The AWS SDK cannot find credentials. Run `aws configure` to set up
-access keys, or set `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment
-variables. For SSO-based access, run `aws sso login` first.
-
-### `Could not load the default credentials` on Spanner cloud
-
-The Google Cloud SDK cannot find Application Default Credentials. Run:
-
-```bash
-gcloud auth application-default login
-```
