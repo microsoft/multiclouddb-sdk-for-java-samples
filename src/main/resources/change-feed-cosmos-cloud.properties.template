@@ -46,9 +46,28 @@ multiclouddb.connection.connectionMode=gateway
 #   az cosmosdb sql container throughput update --throughput 30000 ...
 # multiclouddb.throughput=30000
 
-# --- Extended Retention (optional) -------------------------------------------
-# Set to enable extended change-feed retention (in days). When set, the SDK
-# opts into reading change events older than the 24-hour baseline.
-# Requires a Cosmos account with Continuous Backup enabled.
-# Omit or leave commented out for the default 24-hour baseline.
+# --- Extended Retention (ChangeFeedExtendedRetentionSample only) -------------
+#
+# HOW EXTENDED RETENTION WORKS:
+#
+#   There are TWO ways to get extended change-feed retention on Cosmos DB,
+#   depending on your account's backup policy:
+#
+#   OPTION A — Continuous Backup account (RECOMMENDED):
+#     Account setup: Enable Continuous Backup (7d or 30d tier) in Azure Portal
+#                    → Cosmos account → Backup & Restore → Continuous
+#     Properties:    Do NOT set extendedRetentionDays (leave commented out)
+#     Behavior:      AVAD is automatic. Retention = backup tier (7d or 30d).
+#                    The sample detects this and proceeds without opt-in.
+#
+#   OPTION B — Periodic Backup account (explicit opt-in):
+#     Account setup: No account-level change needed.
+#     Properties:    Uncomment extendedRetentionDays below.
+#     Behavior:      The SDK creates the container with an explicit AVAD
+#                    ChangeFeedPolicy. Retention = the value you specify.
+#
+# IMPORTANT: Do NOT set extendedRetentionDays on a Continuous Backup account!
+#            Cosmos rejects explicit retention policies when CB is enabled.
+#
+# Uncomment ONLY if you have a Periodic Backup (non-CB) account:
 # multiclouddb.changefeed.extendedRetentionDays=7

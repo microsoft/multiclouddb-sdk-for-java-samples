@@ -934,49 +934,64 @@ Total events observed: 3
 The portable change-feed baseline is **24 hours**: the SDK treats every cursor
 token older than that as expired, regardless of what the underlying provider
 stores server-side. Many real workloads want longer history — disaster
-recovery, late-arriving subscribers, weekend backfills. The SDK exposes an
-opt-in for this via `ChangeFeedConfig.extendedRetention(Duration)`, wired into
-the client via `MulticloudDbClientConfig.Builder#changeFeed(...)`.
+recovery, late-arriving subscribers, weekend backfills.
 
-Opting in is a **portable contract, not a guarantee**: providers that cannot
-extend retention beyond 24h refuse to be instantiated at all. The refusal is
-synchronous and happens in `MulticloudDbClientFactory.create(...)` —
-**before any network I/O** — surfaced as
-`MulticloudDbErrorCategory.UNSUPPORTED_CAPABILITY` with
-`providerDetails.reason = "extended_retention_unavailable"`. Misconfiguration
-cannot lurk until the first `listCursors` / `readChanges` call.
+### How to enable extended retention (Cosmos DB)
 
-`ChangeFeedExtendedRetentionSample` demonstrates this build-time gate
-on Cosmos DB.
+There are **two paths** depending on your account's backup policy:
+
+#### Option A: Continuous Backup account (Recommended)
+
+| Step | What to do |
+|------|-----------|
+| **Account setup** | Azure Portal → Cosmos account → **Backup & Restore** → Enable **Continuous Backup** (7-day or 30-day tier) |
+| **Properties file** | Do **NOT** set `extendedRetentionDays` — leave it commented out |
+| **How it works** | AVAD change feed is automatic on every container. Retention = your backup tier (7d or 30d). |
+| **Verify** | `az cosmosdb show --name <acct> -g <rg> --query backupPolicy.type -o tsv` → `Continuous` |
+
+```properties
+# change-feed-cosmos-cloud.properties for a CB account:
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
+multiclouddb.connection.key=<primary-master-key>
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+# Do NOT set extendedRetentionDays on a CB account!
+```
+
+#### Option B: Periodic Backup account (explicit opt-in)
+
+| Step | What to do |
+|------|-----------|
+| **Account setup** | No account-level change needed |
+| **Properties file** | Set `multiclouddb.changefeed.extendedRetentionDays=7` (or desired days) |
+| **How it works** | The SDK creates the container with an explicit AVAD `ChangeFeedPolicy`. Retention = value you specify. |
+
+```properties
+# change-feed-cosmos-cloud.properties for a non-CB account:
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
+multiclouddb.connection.key=<primary-master-key>
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.changefeed.extendedRetentionDays=7
+```
+
+> **⚠️ Do NOT set `extendedRetentionDays` on a Continuous Backup account!**
+> Cosmos rejects explicit retention policies when CB is enabled. The sample
+> detects this and prints a clear error message with fix instructions.
 
 ### Per-provider behaviour
 
 | Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
 |----------|---------------------------------------------|--------------------------|
-| **Azure Cosmos DB** | Supported | `Client built successfully — capability gate passed.` Notes: *"Up to 30 days via Continuous Backup 30d tier; 7d minimum (AVAD requires Continuous Backup)."* |
+| **Azure Cosmos DB** | Supported | Detects account type (CB vs non-CB) and proceeds accordingly. |
 | **Google Cloud Spanner** | ⏳ Not yet supported | Change-feed support for Spanner is not yet available. |
 | **AWS DynamoDB** | ⏳ Not yet supported | Change-feed support for DynamoDB is not yet available. |
 
-> **This sample performs a full data-plane round-trip** — after the
-> capability gate passes, it provisions a container, writes test items,
-> and consumes change events using multi-threaded cursor readers.
-
-### Configuration
-
-Extended retention can be enabled in two ways:
-
-1. **Via properties file** (recommended):
-   ```properties
-   # In change-feed-cosmos-cloud.properties:
-   multiclouddb.changefeed.extendedRetentionDays=7
-   ```
-
-2. **Programmatically** (the sample falls back to this if the property is not set):
-   ```java
-   ChangeFeedConfig cf = ChangeFeedConfig.builder()
-       .extendedRetention(Duration.ofDays(7))
-       .build();
-   ```
+> **This sample performs a full data-plane round-trip** — after detecting
+> your account type, it provisions a container, writes test items, and
+> consumes change events using multi-threaded cursor readers.
 
 ### Running `ChangeFeedExtendedRetentionSample`
 
