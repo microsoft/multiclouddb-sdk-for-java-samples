@@ -119,7 +119,7 @@ public class ChangeFeedExtendedRetentionSample {
         }
 
         System.out.println("=== Multicloud DB Change Feed — Extended Retention Sample ===");
-        System.out.println("Provider          : " + provider.displayName());
+        System.out.println("Provider: " + provider.displayName());
 
         // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
         if (!ProviderId.COSMOS.equals(provider)) {
@@ -129,8 +129,6 @@ public class ChangeFeedExtendedRetentionSample {
             System.exit(1);
             return;
         }
-
-        System.out.println("Requested window  : " + REQUESTED_RETENTION + " (baseline is 24h)");
         System.out.println();
 
         // The Cosmos emulator does not support Continuous Backup, which is a
@@ -153,13 +151,18 @@ public class ChangeFeedExtendedRetentionSample {
         // ConfigLoader already wired the extended retention into the SDK config.
         // Otherwise, apply the sample's default programmatically.
         MulticloudDbClientConfig sdkConfig = appConfig.sdk();
-        if (sdkConfig.changeFeed() == null) {
-            sdkConfig = withExtendedRetention(sdkConfig, REQUESTED_RETENTION);
-            System.out.println("--- Building client with extendedRetention("
-                    + REQUESTED_RETENTION + ") [programmatic fallback] ---");
+        Duration retentionWindow;
+        if (sdkConfig.changeFeed() != null && sdkConfig.changeFeed().extendedRetention().isPresent()) {
+            retentionWindow = sdkConfig.changeFeed().extendedRetention().get();
+            System.out.println("Extended retention: " + retentionWindow.toDays()
+                    + " days (from config: multiclouddb.changefeed.extendedRetentionDays)");
         } else {
-            System.out.println("--- Building client with extendedRetention from config ---");
+            retentionWindow = REQUESTED_RETENTION;
+            sdkConfig = withExtendedRetention(sdkConfig, retentionWindow);
+            System.out.println("Extended retention: " + retentionWindow.toDays()
+                    + " days (programmatic default — set multiclouddb.changefeed.extendedRetentionDays in config to override)");
         }
+        System.out.println();
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
             // The build-time gate passed — the provider declares the capability.
             CapabilitySet caps = client.capabilities();
