@@ -851,8 +851,9 @@ java "-Dchangefeed.poll.intervalMs=250" `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
-> Invalid values (non-numeric, ≤ 0) print a warning to stderr and fall back to
-> the 1000 ms default — the watcher does not exit on bad input.
+> Non-numeric values print a warning to stderr and fall back to the 1000 ms
+> default. Numeric values < 1 are clamped to 1 ms to avoid a busy-loop.
+> The watcher does not exit on bad input.
 
 ---
 

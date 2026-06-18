@@ -69,37 +69,17 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   </tr>
  * </table>
  *
- * <h3>Why this sample does not perform data-plane reads</h3>
- * The build-time capability gate is the portable contract; the sample stops
- * there on purpose. Actually reading change events beyond the 24-hour baseline
- * requires provider-specific substrate setup that is out of scope for a
- * portable demo:
- * <ul>
- *   <li><b>Cosmos:</b> needs an AVAD container on a non-CB account (or a CB
- *       account with the SDK's CB-aware code path, which currently mis-maps
- *       the service's "retention conflicts with CB" 400 — see
- *       {@code README-change-feed.md} for the caveat).</li>
- *   <li><b>Spanner:</b> needs a {@code CREATE CHANGE STREAM ... OPTIONS(
- *       retention_period = '7d', value_capture_type = 'NEW_ROW')} created
- *       out-of-band.</li>
- * </ul>
- * The plain {@link ChangeFeedSample} and {@link ChangeFeedWatcherSample}
- * cover the data-plane round-trip at the portable 24-hour baseline.
+ * <h3>Data-plane round-trip</h3>
+ * After the capability gate passes, this sample provisions a container,
+ * writes test items, and consumes change events using multi-threaded
+ * cursor readers (one thread per partition). This demonstrates
+ * extended-retention reads end-to-end on Cosmos DB.
  *
  * <h3>Usage</h3>
  *
  * <pre>
- *   # Default: Cosmos (live, Continuous-Backup account)
- *   java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
- *
- *   # Spanner (should succeed)
- *   java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
- *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
- *
- *   # DynamoDB (should fail fast with UNSUPPORTED_CAPABILITY)
- *   java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+ *   # Cosmos (live, Continuous-Backup account)
+ *   java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
  *        com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
  * </pre>
@@ -128,7 +108,8 @@ public class ChangeFeedExtendedRetentionSample {
         // because it contains secrets. If it is missing, ConfigLoader proceeds
         // with system properties only, which will lack connection info.
         if (appConfig.sdk().connection().get("endpoint") == null
-                && appConfig.sdk().connection().get("region") == null) {
+                && appConfig.sdk().connection().get("region") == null
+                && appConfig.sdk().connection().get("projectId") == null) {
             System.err.println("ERROR: No connection info found. This sample requires a live "
                     + "cloud account (the emulator does not support extended retention).");
             System.err.println();
