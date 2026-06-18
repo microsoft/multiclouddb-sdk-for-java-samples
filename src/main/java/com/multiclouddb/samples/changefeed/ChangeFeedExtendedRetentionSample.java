@@ -179,8 +179,10 @@ public class ChangeFeedExtendedRetentionSample {
             System.out.println();
 
             // === Data-plane: multi-threaded cursor reads ===
+            // Use a dedicated container to avoid conflicts with ChangeFeedSample's
+            // container (which may have a different retention policy).
             String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
-            String collection = appConfig.property("multiclouddb.collection", DEFAULT_COLLECTION);
+            String collection = DEFAULT_COLLECTION; // always "retention_demo" — not from config
             ResourceAddress address = new ResourceAddress(database, collection);
 
             // Provision schema
@@ -229,7 +231,7 @@ public class ChangeFeedExtendedRetentionSample {
             if (ex.error() != null
                     && MulticloudDbErrorCategory.UNSUPPORTED_CAPABILITY.equals(ex.error().category())) {
                 System.err.println();
-                System.err.println("--- Build-time gate REFUSED extended retention ---");
+                System.err.println("--- Extended retention REFUSED ---");
                 System.err.println("  Provider : " + provider.displayName());
                 System.err.println("  Category : " + ex.error().category());
                 System.err.println("  Message  : " + ex.error().message());
@@ -238,9 +240,13 @@ public class ChangeFeedExtendedRetentionSample {
                     System.err.println("  Details  : " + details);
                 }
                 System.err.println();
-                System.err.println("This is the expected outcome on providers that do not "
-                        + "declare Capability.EXTENDED_CHANGE_FEED_HISTORY (e.g. AWS "
-                        + "DynamoDB, whose Streams retention is fixed at 24h server-side).");
+                String reason = details != null ? details.getOrDefault("reason", "") : "";
+                if (reason.contains("not_enacted")) {
+                    System.err.println("FIX: The container already exists with a different retention "
+                            + "policy. Delete the container and re-run, or use a fresh container name.");
+                } else {
+                    System.err.println("The provider does not support extended retention.");
+                }
                 System.exit(1);
                 return;
             }
