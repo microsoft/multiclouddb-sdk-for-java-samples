@@ -231,6 +231,14 @@ public class ChangeFeedExtendedRetentionSample {
                 System.out.println("  Notes     : " + cap.notes());
             }
             System.out.println();
+
+            // Verify base change-feed capability before proceeding to data-plane
+            if (!caps.isSupported(Capability.CHANGE_FEED)) {
+                System.err.println("ERROR: Provider supports extended retention but does not "
+                        + "support base change feed. Data-plane operations will fail.");
+                System.exit(2);
+                return;
+            }
         }
 
         // Step 2: Provision container using a plain client (no extended retention)

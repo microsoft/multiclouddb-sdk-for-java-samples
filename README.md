@@ -235,13 +235,11 @@ java "-Dchangefeed.poll.intervalMs=500" `
 #### 3. Extended retention escape hatch (`ChangeFeedExtendedRetentionSample`)
 
 Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts
-to build a client. Succeeds on Cosmos and Spanner (which declare
-`Capability.EXTENDED_CHANGE_FEED_HISTORY`); fails fast on DynamoDB with
-`UNSUPPORTED_CAPABILITY` before any network I/O. Use this to verify which
-providers can be asked for longer-than-24-hour change-feed history before you
-write any cursor-persistence code. See
+to build a client. Succeeds on Cosmos (which declares
+`Capability.EXTENDED_CHANGE_FEED_HISTORY`). Use this to verify extended
+retention configuration and test cursor persistence beyond 24 hours. See
 [`README-change-feed.md`](README-change-feed.md#extended-retention-escape-hatch)
-for the per-provider breakdown.
+for details.
 
 **macOS / Linux:**
 
@@ -339,7 +337,7 @@ multiclouddb-samples/
 
 ## SDK Version
 
-This project depends on **Multicloud DB SDK `0.1.0-beta.1`** ([Maven Central](https://search.maven.org/artifact/com.microsoft.multiclouddb/multiclouddb-api)).
+This project depends on **Multicloud DB SDK `0.1.0-beta.2`** ([Maven Central](https://search.maven.org/artifact/com.microsoft.multiclouddb/multiclouddb-api)).
 
 ### Upgrading
 
