@@ -136,7 +136,7 @@ public class ChangeFeedWatcherSample {
         AtomicBoolean shutdown = new AtomicBoolean(false);
         AtomicLong totalEvents = new AtomicLong(0);
 
-        try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk())) {
+        try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdkWithoutExtendedRetention())) {
 
             // Bail out early if the active provider doesn't support change feed.
             // Currently only Cosmos DB is supported; DynamoDB and Spanner

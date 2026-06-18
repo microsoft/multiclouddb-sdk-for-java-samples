@@ -61,6 +61,26 @@ public final class ConfigLoader {
         public String property(String key) {
             return properties.getProperty(key);
         }
+
+        /**
+         * Returns the SDK config without the changeFeed extended retention opt-in.
+         * Use this in samples that don't need explicit extended retention
+         * (e.g. ChangeFeedSample, ChangeFeedWatcherSample) — on CB accounts,
+         * extended retention is automatic and setting it explicitly causes errors.
+         */
+        public MulticloudDbClientConfig sdkWithoutExtendedRetention() {
+            if (sdk.changeFeed() == null) {
+                return sdk;
+            }
+            return MulticloudDbClientConfig.builder()
+                    .provider(sdk.provider())
+                    .connection(sdk.connection())
+                    .auth(sdk.auth())
+                    .defaultOptions(sdk.defaultOptions())
+                    .nativeDiagnosticsEnabled(sdk.nativeDiagnosticsEnabled())
+                    .userAgentSuffix(sdk.userAgentSuffix())
+                    .build();
+        }
     }
 
     /**

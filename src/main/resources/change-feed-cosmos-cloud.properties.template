@@ -73,5 +73,6 @@ multiclouddb.connection.connectionMode=gateway
 #     Behavior:      The SDK creates the container with an explicit AVAD
 #                    ChangeFeedPolicy. Retention = the value you specify below.
 #
-# Set the number of days for extended retention (REQUIRED for this sample):
-multiclouddb.changefeed.retentionDays=7
+# Set the number of days for extended retention
+# (only needed for ChangeFeedExtendedRetentionSample on Periodic Backup accounts):
+# multiclouddb.changefeed.retentionDays=7
