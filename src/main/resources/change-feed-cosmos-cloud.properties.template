@@ -50,24 +50,24 @@ multiclouddb.connection.connectionMode=gateway
 #
 # HOW EXTENDED RETENTION WORKS:
 #
-#   There are TWO ways to get extended change-feed retention on Cosmos DB,
-#   depending on your account's backup policy:
+#   Extended retention = reading changes older than 24 hours.
+#   This property is REQUIRED to run ChangeFeedExtendedRetentionSample.
 #
-#   OPTION A — Continuous Backup account (RECOMMENDED):
+#   There are TWO Cosmos DB account types, each with different behavior:
+#
+#   Continuous Backup (CB) account:
 #     Account setup: Enable Continuous Backup (7d or 30d tier) in Azure Portal
 #                    → Cosmos account → Backup & Restore → Continuous
-#     Properties:    Do NOT set extendedRetentionDays (leave commented out)
 #     Behavior:      AVAD is automatic. Retention = backup tier (7d or 30d).
-#                    The sample detects this and proceeds without opt-in.
+#     NOTE:          On CB accounts, Cosmos REJECTS explicit retention policies.
+#                    This sample will detect the error and explain the situation.
+#                    For CB accounts, use ChangeFeedSample/ChangeFeedWatcherSample
+#                    instead — they already benefit from extended retention.
 #
-#   OPTION B — Periodic Backup account (explicit opt-in):
+#   Periodic Backup (non-CB) account:
 #     Account setup: No account-level change needed.
-#     Properties:    Uncomment extendedRetentionDays below.
 #     Behavior:      The SDK creates the container with an explicit AVAD
-#                    ChangeFeedPolicy. Retention = the value you specify.
+#                    ChangeFeedPolicy. Retention = the value you specify below.
 #
-# IMPORTANT: Do NOT set extendedRetentionDays on a Continuous Backup account!
-#            Cosmos rejects explicit retention policies when CB is enabled.
-#
-# Uncomment ONLY if you have a Periodic Backup (non-CB) account:
-# multiclouddb.changefeed.extendedRetentionDays=7
+# Set the number of days for extended retention (REQUIRED):
+multiclouddb.changefeed.extendedRetentionDays=7

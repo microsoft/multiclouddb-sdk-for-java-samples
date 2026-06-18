@@ -16,7 +16,6 @@ import com.multiclouddb.api.MulticloudDbKey;
 import com.multiclouddb.api.ProviderId;
 import com.multiclouddb.api.ResourceAddress;
 import com.multiclouddb.api.changefeed.ChangeEvent;
-import com.multiclouddb.api.changefeed.ChangeFeedConfig;
 import com.multiclouddb.api.changefeed.ChangeFeedCursor;
 import com.multiclouddb.api.changefeed.ChangeFeedPage;
 
@@ -98,13 +97,6 @@ public class ChangeFeedExtendedRetentionSample {
     private static final String DEFAULT_DATABASE = "multiclouddb_samples";
     private static final String DEFAULT_COLLECTION = "retention_demo";
 
-    /**
-     * 7 days — strictly greater than the 24-hour portable baseline (so the
-     * extended-retention opt-in is actually triggered) and within the Cosmos
-     * DB Continuous Backup 30d tier ceiling.
-     */
-    private static final Duration REQUESTED_RETENTION = Duration.ofDays(7);
-
     public static void main(String[] args) throws Exception {
         ConfigLoader.AppConfig appConfig = ConfigLoader.load(DEFAULT_CONFIG);
         ProviderId provider = appConfig.sdk().provider();
@@ -150,44 +142,31 @@ public class ChangeFeedExtendedRetentionSample {
         // ─── Educational: explain extended retention configuration ───────────
         printConfigurationGuide();
 
-        // Determine whether the user configured extendedRetentionDays in properties.
+        // REQUIRED: extendedRetentionDays must be set in properties file.
+        // This is the explicit user action to enable extended retention.
         MulticloudDbClientConfig sdkConfig = appConfig.sdk();
-        boolean hasExplicitRetention = sdkConfig.changeFeed() != null
+        boolean hasRetentionConfig = sdkConfig.changeFeed() != null
                 && sdkConfig.changeFeed().extendedRetention().isPresent();
-        Duration retentionWindow;
 
-        if (hasExplicitRetention) {
-            retentionWindow = sdkConfig.changeFeed().extendedRetention().get();
-            System.out.println("Configuration detected:");
-            System.out.println("  multiclouddb.changefeed.extendedRetentionDays = " + retentionWindow.toDays());
-            System.out.println("  → This indicates a NON-CB account setup (explicit AVAD opt-in).");
-        } else {
-            retentionWindow = REQUESTED_RETENTION;
-            System.out.println("Configuration detected:");
-            System.out.println("  multiclouddb.changefeed.extendedRetentionDays = (not set)");
-            System.out.println("  → Assuming Continuous Backup account (AVAD is automatic).");
-            System.out.println("  → If you have a non-CB account, set extendedRetentionDays in your properties file.");
+        if (!hasRetentionConfig) {
+            System.err.println("ERROR: multiclouddb.changefeed.extendedRetentionDays is not set.");
+            System.err.println();
+            System.err.println("To enable extended retention, add this to your properties file:");
+            System.err.println("  multiclouddb.changefeed.extendedRetentionDays=7");
+            System.err.println();
+            System.err.println("Then rebuild: mvn clean package -DskipTests");
+            System.exit(2);
+            return;
         }
+
+        Duration retentionWindow = sdkConfig.changeFeed().extendedRetention().get();
+        System.out.println("Configuration:");
+        System.out.println("  multiclouddb.changefeed.extendedRetentionDays = " + retentionWindow.toDays());
+        System.out.println("  Requesting " + retentionWindow.toDays() + " day(s) extended retention");
         System.out.println();
 
-        // ─── Build the client ────────────────────────────────────────────────
-        // Strategy:
-        // 1. If extendedRetentionDays is set → build with explicit retention (non-CB path)
-        // 2. If not set → build WITHOUT extendedRetention (CB path, AVAD is automatic)
-        //    The SDK still allows reading beyond 24h on CB accounts because the
-        //    server stores all versions automatically.
-        if (hasExplicitRetention) {
-            // Non-CB path: SDK will create container with explicit AVAD policy
-            System.out.println("--- Path: Explicit AVAD opt-in (non-CB account) ---");
-            System.out.println("  Requesting " + retentionWindow.toDays() + " day(s) retention");
-            runWithExplicitRetention(appConfig, sdkConfig, retentionWindow);
-        } else {
-            // CB path: no explicit retention — AVAD is automatic
-            System.out.println("--- Path: Continuous Backup (AVAD automatic) ---");
-            System.out.println("  Retention is controlled by your backup tier (7d or 30d).");
-            System.out.println("  Verify with: az cosmosdb show --name <acct> -g <rg> --query backupPolicy");
-            runWithContinuousBackup(appConfig, sdkConfig);
-        }
+        // ─── Build the client and run ────────────────────────────────────────
+        runWithExtendedRetention(appConfig, sdkConfig, retentionWindow);
     }
 
     /**
@@ -200,74 +179,37 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println("║                                                                  ║");
         System.out.println("║  Extended retention = reading changes older than 24 hours.       ║");
         System.out.println("║                                                                  ║");
-        System.out.println("║  OPTION A: Continuous Backup account (RECOMMENDED)               ║");
-        System.out.println("║  ─────────────────────────────────────────────────               ║");
-        System.out.println("║  Account setup:                                                  ║");
-        System.out.println("║    Azure Portal → Cosmos account → Backup & Restore              ║");
-        System.out.println("║    → Enable Continuous Backup (7-day or 30-day tier)             ║");
+        System.out.println("║  STEP 1 — Account-level setup (Azure Portal):                   ║");
+        System.out.println("║    • Continuous Backup account (RECOMMENDED):                    ║");
+        System.out.println("║      Azure Portal → Cosmos account → Backup & Restore           ║");
+        System.out.println("║      → Enable Continuous Backup (7-day or 30-day tier)          ║");
+        System.out.println("║      Retention = backup tier duration (7d or 30d).               ║");
+        System.out.println("║    • Periodic Backup account:                                    ║");
+        System.out.println("║      No account-level change needed.                             ║");
+        System.out.println("║      The SDK creates the container with explicit AVAD policy.    ║");
         System.out.println("║                                                                  ║");
-        System.out.println("║  Properties file:                                                ║");
-        System.out.println("║    (no extendedRetentionDays needed — AVAD is automatic)         ║");
-        System.out.println("║                                                                  ║");
-        System.out.println("║  Retention: Controlled by backup tier (7d or 30d).               ║");
-        System.out.println("║                                                                  ║");
-        System.out.println("║  OPTION B: Periodic Backup account (explicit opt-in)             ║");
-        System.out.println("║  ────────────────────────────────────────────────────            ║");
-        System.out.println("║  Account setup:                                                  ║");
-        System.out.println("║    No account-level change needed.                               ║");
-        System.out.println("║                                                                  ║");
-        System.out.println("║  Properties file:                                                ║");
+        System.out.println("║  STEP 2 — Properties file (REQUIRED for both account types):    ║");
         System.out.println("║    multiclouddb.changefeed.extendedRetentionDays=7               ║");
         System.out.println("║                                                                  ║");
-        System.out.println("║  Retention: The value you specify in the property.               ║");
-        System.out.println("║  The SDK creates the container with an explicit AVAD policy.     ║");
+        System.out.println("║  NOTE: On a Continuous Backup account, the actual retention is   ║");
+        System.out.println("║  controlled by the backup tier, but the property is still        ║");
+        System.out.println("║  required to signal the SDK that you want extended retention.    ║");
         System.out.println("║                                                                  ║");
         System.out.println("╚══════════════════════════════════════════════════════════════════╝");
         System.out.println();
     }
 
     /**
-     * CB account path: build client WITHOUT extendedRetention, provision a
-     * plain container (AVAD is automatic), and demonstrate data-plane reads.
+     * Build client with extended retention, provision container, and run
+     * data-plane reads. Handles CB vs non-CB account errors gracefully.
      */
-    private static void runWithContinuousBackup(ConfigLoader.AppConfig appConfig,
-                                                MulticloudDbClientConfig sdkConfig) throws Exception {
-        try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
-            CapabilitySet caps = client.capabilities();
-            Capability cap = caps.get(Capability.EXTENDED_CHANGE_FEED_HISTORY);
-
-            System.out.println();
-            System.out.println("  Client built successfully.");
-            System.out.println();
-            System.out.println("--- Capability detail ---");
-            System.out.println("  Name      : " + Capability.EXTENDED_CHANGE_FEED_HISTORY);
-            System.out.println("  Supported : " + caps.isSupported(Capability.EXTENDED_CHANGE_FEED_HISTORY));
-            if (cap != null && cap.notes() != null && !cap.notes().isBlank()) {
-                System.out.println("  Notes     : " + cap.notes());
-            }
-            System.out.println();
-            System.out.println("  On a Continuous Backup account, ALL containers automatically");
-            System.out.println("  have All-Versions-and-Deletes (AVAD) change feed enabled.");
-            System.out.println("  Retention duration = your backup tier (7d or 30d).");
-            System.out.println("  No SDK opt-in is required.");
-            System.out.println();
-
-            runDataPlane(client, appConfig, "cb_retention_demo");
-        }
-    }
-
-    /**
-     * Non-CB account path: build client WITH extendedRetention opt-in,
-     * provision a container with explicit AVAD policy, and demonstrate reads.
-     */
-    private static void runWithExplicitRetention(ConfigLoader.AppConfig appConfig,
+    private static void runWithExtendedRetention(ConfigLoader.AppConfig appConfig,
                                                  MulticloudDbClientConfig sdkConfig,
                                                  Duration retentionWindow) throws Exception {
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
             CapabilitySet caps = client.capabilities();
             Capability cap = caps.get(Capability.EXTENDED_CHANGE_FEED_HISTORY);
 
-            System.out.println();
             System.out.println("  Client built successfully — capability gate passed.");
             System.out.println();
             System.out.println("--- Capability detail ---");
@@ -276,9 +218,6 @@ public class ChangeFeedExtendedRetentionSample {
             if (cap != null && cap.notes() != null && !cap.notes().isBlank()) {
                 System.out.println("  Notes     : " + cap.notes());
             }
-            System.out.println();
-            System.out.println("  The SDK will create the container with an explicit AVAD");
-            System.out.println("  ChangeFeedPolicy (retention=" + retentionWindow + ").");
             System.out.println();
 
             runDataPlane(client, appConfig, DEFAULT_COLLECTION);
@@ -299,7 +238,7 @@ public class ChangeFeedExtendedRetentionSample {
                 }
                 System.err.println();
 
-                // Detect CB account trying to use explicit retention
+                // Detect CB account conflict
                 if (message.contains("continuous backup mode is enabled")
                         || message.contains("Continuous Backup")
                         || reason.contains("continuous_backup_required")) {
@@ -307,15 +246,19 @@ public class ChangeFeedExtendedRetentionSample {
                     System.err.println("║  YOUR ACCOUNT HAS CONTINUOUS BACKUP ENABLED                 ║");
                     System.err.println("╠══════════════════════════════════════════════════════════════╣");
                     System.err.println("║                                                              ║");
-                    System.err.println("║  On CB accounts, you do NOT need extendedRetentionDays.      ║");
-                    System.err.println("║  AVAD change feed is AUTOMATIC on every container.           ║");
-                    System.err.println("║  Retention is controlled by your backup tier (7d or 30d).    ║");
+                    System.err.println("║  On CB accounts, AVAD change feed is AUTOMATIC on every     ║");
+                    System.err.println("║  container. Retention is controlled by the backup tier       ║");
+                    System.err.println("║  (7d or 30d), NOT by the extendedRetentionDays property.    ║");
                     System.err.println("║                                                              ║");
-                    System.err.println("║  FIX: Remove or comment out this line from your properties:  ║");
-                    System.err.println("║    # multiclouddb.changefeed.extendedRetentionDays=7         ║");
+                    System.err.println("║  The SDK cannot set an explicit retention policy on a CB     ║");
+                    System.err.println("║  account — Cosmos rejects it. This is expected behavior.    ║");
                     System.err.println("║                                                              ║");
-                    System.err.println("║  Then rebuild (mvn clean package -DskipTests) and re-run.    ║");
-                    System.err.println("║  The sample will use the CB path automatically.              ║");
+                    System.err.println("║  On a CB account, use ChangeFeedSample or                    ║");
+                    System.err.println("║  ChangeFeedWatcherSample instead — they already benefit     ║");
+                    System.err.println("║  from extended retention automatically.                      ║");
+                    System.err.println("║                                                              ║");
+                    System.err.println("║  This sample (explicit opt-in) is for Periodic Backup       ║");
+                    System.err.println("║  accounts only.                                              ║");
                     System.err.println("║                                                              ║");
                     System.err.println("╚══════════════════════════════════════════════════════════════╝");
                 } else if (reason.contains("not_enacted")) {
@@ -379,30 +322,6 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println();
         System.out.println("  Extended retention is working! Changes older than 24h can be read");
         System.out.println("  using cursors obtained from listCursors() or startFrom(Instant).");
-    }
-
-    /**
-     * Returns a copy of {@code base} with {@code .changeFeed(...)} set to an
-     * extended-retention opt-in for the given window.
-     */
-    private static MulticloudDbClientConfig withExtendedRetention(
-            MulticloudDbClientConfig base, Duration retention) {
-        ChangeFeedConfig cf = ChangeFeedConfig.builder()
-                .extendedRetention(retention)
-                .build();
-
-        MulticloudDbClientConfig.Builder builder = MulticloudDbClientConfig.builder()
-                .provider(base.provider())
-                .connection(base.connection())
-                .auth(base.auth())
-                .defaultOptions(base.defaultOptions())
-                .nativeDiagnosticsEnabled(base.nativeDiagnosticsEnabled())
-                .changeFeed(cf);
-
-        if (base.userAgentSuffix() != null) {
-            builder.userAgentSuffix(base.userAgentSuffix());
-        }
-        return builder.build();
     }
 
     // ── Writer: produces CREATE/UPDATE/DELETE events ─────────────────────────
