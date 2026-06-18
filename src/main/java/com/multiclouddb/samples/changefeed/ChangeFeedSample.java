@@ -31,6 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * primitives: {@code listCursors}, {@code readChanges}, and the opaque
  * cursor-token round-trip.
  * <p>
+ * <b>Note:</b> This sample currently supports <b>Azure Cosmos DB only</b>.
+ * DynamoDB and Spanner change-feed support is not yet available in this repo.
+ * <p>
  * Usage:
  *
  * <pre>
@@ -67,10 +70,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       endpoints and pre-provisions the AVAD container directly via the
  *       Cosmos SDK with a 10-minute {@code ChangeFeedPolicy} (the emulator's
  *       hard ceiling).</li>
- *   <li><b>DynamoDB</b> — table needs {@code StreamSpecification(NEW_AND_OLD_IMAGES)}
- *       (must be set out-of-band).</li>
- *   <li><b>Spanner</b> — needs a {@code CHANGE STREAM ... OPTIONS(
- *       value_capture_type = 'NEW_ROW')} (must be created out-of-band).</li>
  * </ul>
  * This sample uses a dedicated database ({@code multiclouddb-sdk-for-java-changefeed})
  * and container ({@code change-feed-demo}) to avoid conflicting with non-AVAD
