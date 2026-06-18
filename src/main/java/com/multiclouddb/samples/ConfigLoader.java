@@ -31,7 +31,7 @@ import java.util.Properties;
  *   multiclouddb.connection.key=...
  *   multiclouddb.auth.accessKeyId=...     # auth settings (when needed)
  *   multiclouddb.feature.someFlag=true    # optional feature flags
- *   multiclouddb.changefeed.extendedRetentionDays=7  # opt into extended retention (days)
+ *   multiclouddb.changefeed.retentionDays=7  # opt into extended retention (days)
  * </pre>
  * <p>
  * To switch providers, simply point to a different config file at startup.
@@ -117,18 +117,21 @@ public final class ConfigLoader {
         }
 
         // Change-feed configuration (optional)
-        String retentionDays = props.getProperty("multiclouddb.changefeed.extendedRetentionDays");
+        // If retentionDays is set, opt into extended retention (> 24h baseline).
+        // If omitted, ChangeFeedConfig.defaults() (24h) is used — works on ALL providers.
+        // Leave the property out for providers that don't support extended retention
+        // (e.g. DynamoDB). The SDK fails fast if you set it on an unsupported provider.
+        String retentionDays = props.getProperty("multiclouddb.changefeed.retentionDays");
         if (retentionDays != null && !retentionDays.isBlank()) {
             try {
                 long days = Long.parseLong(retentionDays.trim());
                 if (days > 0) {
-                    ChangeFeedConfig cf = ChangeFeedConfig.builder()
+                    builder.changeFeed(ChangeFeedConfig.builder()
                             .extendedRetention(Duration.ofDays(days))
-                            .build();
-                    builder.changeFeed(cf);
+                            .build());
                 }
             } catch (NumberFormatException e) {
-                System.err.println("  WARNING: multiclouddb.changefeed.extendedRetentionDays="
+                System.err.println("  WARNING: multiclouddb.changefeed.retentionDays="
                         + retentionDays + " is not a valid number; ignoring.");
             }
         }

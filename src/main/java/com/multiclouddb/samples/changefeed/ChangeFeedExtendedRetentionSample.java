@@ -48,13 +48,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   <tr>
  *     <td><b>Continuous Backup (CB) account</b></td>
  *     <td>Enable Continuous Backup (7-day or 30-day tier) in Azure Portal</td>
- *     <td>No {@code extendedRetentionDays} needed — AVAD is automatic</td>
+ *     <td>No {@code retentionDays} needed — AVAD is automatic</td>
  *     <td>Controlled by backup tier (7d or 30d)</td>
  *   </tr>
  *   <tr>
  *     <td><b>Periodic Backup (non-CB) account</b></td>
  *     <td>No account-level change needed</td>
- *     <td>Set {@code multiclouddb.changefeed.extendedRetentionDays=N} in properties</td>
+ *     <td>Set {@code multiclouddb.changefeed.retentionDays=N} in properties</td>
  *     <td>The value you specify (up to provider limit)</td>
  *   </tr>
  * </table>
@@ -68,8 +68,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   multiclouddb.connection.connectionMode=gateway
  *   multiclouddb.database=multiclouddb-sdk-for-java-changefeed
  *
- *   # Extended retention opt-in (NON-CB accounts only):
- *   # multiclouddb.changefeed.extendedRetentionDays=7
+ *   # Extended retention opt-in:
+ *   # multiclouddb.changefeed.retentionDays=7
  *   #
  *   # On CB accounts, OMIT this property — retention is automatic from
  *   # the backup tier. Setting it will cause a provisioning error.
@@ -142,17 +142,17 @@ public class ChangeFeedExtendedRetentionSample {
         // ─── Educational: explain extended retention configuration ───────────
         printConfigurationGuide();
 
-        // REQUIRED: extendedRetentionDays must be set in properties file.
+        // REQUIRED: retentionDays must be set in properties file.
         // This is the explicit user action to enable extended retention.
         MulticloudDbClientConfig sdkConfig = appConfig.sdk();
         boolean hasRetentionConfig = sdkConfig.changeFeed() != null
                 && sdkConfig.changeFeed().extendedRetention().isPresent();
 
         if (!hasRetentionConfig) {
-            System.err.println("ERROR: multiclouddb.changefeed.extendedRetentionDays is not set.");
+            System.err.println("ERROR: multiclouddb.changefeed.retentionDays is not set.");
             System.err.println();
             System.err.println("To enable extended retention, add this to your properties file:");
-            System.err.println("  multiclouddb.changefeed.extendedRetentionDays=7");
+            System.err.println("  multiclouddb.changefeed.retentionDays=7");
             System.err.println();
             System.err.println("Then rebuild: mvn clean package -DskipTests");
             System.exit(2);
@@ -161,7 +161,7 @@ public class ChangeFeedExtendedRetentionSample {
 
         Duration retentionWindow = sdkConfig.changeFeed().extendedRetention().get();
         System.out.println("Configuration:");
-        System.out.println("  multiclouddb.changefeed.extendedRetentionDays = " + retentionWindow.toDays());
+        System.out.println("  multiclouddb.changefeed.retentionDays = " + retentionWindow.toDays());
         System.out.println("  Requesting " + retentionWindow.toDays() + " day(s) extended retention");
         System.out.println();
 
@@ -188,12 +188,17 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println("║      No account-level change needed.                             ║");
         System.out.println("║      The SDK creates the container with explicit AVAD policy.    ║");
         System.out.println("║                                                                  ║");
-        System.out.println("║  STEP 2 — Properties file (REQUIRED for both account types):    ║");
-        System.out.println("║    multiclouddb.changefeed.extendedRetentionDays=7               ║");
+        System.out.println("║  STEP 2 — Properties file (REQUIRED for this sample):         ║");
+        System.out.println("║    multiclouddb.changefeed.retentionDays=7                     ║");
         System.out.println("║                                                                  ║");
-        System.out.println("║  NOTE: On a Continuous Backup account, the actual retention is   ║");
-        System.out.println("║  controlled by the backup tier, but the property is still        ║");
-        System.out.println("║  required to signal the SDK that you want extended retention.    ║");
+        System.out.println("║  If omitted → ChangeFeedConfig.defaults() (24h baseline).       ║");
+        System.out.println("║  If set → SDK opts into extended retention via                   ║");
+        System.out.println("║    ChangeFeedConfig.builder()                                    ║");
+        System.out.println("║        .extendedRetention(Duration.ofDays(N)).build()            ║");
+        System.out.println("║                                                                  ║");
+        System.out.println("║  Leave the property OUT for providers that don't support it      ║");
+        System.out.println("║  (e.g. DynamoDB). The SDK fails fast if you set it on an         ║");
+        System.out.println("║  unsupported provider.                                           ║");
         System.out.println("║                                                                  ║");
         System.out.println("╚══════════════════════════════════════════════════════════════════╝");
         System.out.println();
@@ -248,7 +253,7 @@ public class ChangeFeedExtendedRetentionSample {
                     System.err.println("║                                                              ║");
                     System.err.println("║  On CB accounts, AVAD change feed is AUTOMATIC on every     ║");
                     System.err.println("║  container. Retention is controlled by the backup tier       ║");
-                    System.err.println("║  (7d or 30d), NOT by the extendedRetentionDays property.    ║");
+                    System.err.println("║  (7d or 30d), NOT by the retentionDays property.            ║");
                     System.err.println("║                                                              ║");
                     System.err.println("║  The SDK cannot set an explicit retention policy on a CB     ║");
                     System.err.println("║  account — Cosmos rejects it. This is expected behavior.    ║");

@@ -936,18 +936,36 @@ token older than that as expired, regardless of what the underlying provider
 stores server-side. Many real workloads want longer history — disaster
 recovery, late-arriving subscribers, weekend backfills.
 
-### How to enable extended retention (Cosmos DB)
+### How to enable extended retention
 
-There are **two paths** depending on your account's backup policy:
+Set `multiclouddb.changefeed.retentionDays` in your properties file:
+
+```properties
+# Any Duration > 24 hours works:
+multiclouddb.changefeed.retentionDays=7    # 7 days
+multiclouddb.changefeed.retentionDays=30   # 30 days
+```
+
+If **omitted** → `ChangeFeedConfig.defaults()` (24h baseline) — works on **all** providers.
+If **set** → SDK opts into extended retention via
+`ChangeFeedConfig.builder().extendedRetention(Duration.ofDays(N)).build()`.
+
+> **The SDK fails fast** if you set `retentionDays` on a provider that doesn't
+> support it. Leave the property **out** for unsupported providers (e.g. DynamoDB).
+
+### Cosmos DB account types
+
+Cosmos DB has two backup policies, each with different behavior:
 
 #### Option A: Continuous Backup account (Recommended)
 
 | Step | What to do |
 |------|-----------|
 | **Account setup** | Azure Portal → Cosmos account → **Backup & Restore** → Enable **Continuous Backup** (7-day or 30-day tier) |
-| **Properties file** | Do **NOT** set `extendedRetentionDays` — leave it commented out |
+| **Properties file** | Do **NOT** set `retentionDays` — AVAD is automatic on CB accounts |
 | **How it works** | AVAD change feed is automatic on every container. Retention = your backup tier (7d or 30d). |
 | **Verify** | `az cosmosdb show --name <acct> -g <rg> --query backupPolicy.type -o tsv` → `Continuous` |
+| **Which samples** | Use `ChangeFeedSample` or `ChangeFeedWatcherSample` — they already get extended retention automatically. |
 
 ```properties
 # change-feed-cosmos-cloud.properties for a CB account:
@@ -956,7 +974,7 @@ multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
 multiclouddb.connection.key=<primary-master-key>
 multiclouddb.connection.connectionMode=gateway
 multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-# Do NOT set extendedRetentionDays on a CB account!
+# Do NOT set retentionDays on a CB account — Cosmos rejects explicit retention policies.
 ```
 
 #### Option B: Periodic Backup account (explicit opt-in)
@@ -964,8 +982,9 @@ multiclouddb.database=multiclouddb-sdk-for-java-changefeed
 | Step | What to do |
 |------|-----------|
 | **Account setup** | No account-level change needed |
-| **Properties file** | Set `multiclouddb.changefeed.extendedRetentionDays=7` (or desired days) |
+| **Properties file** | Set `multiclouddb.changefeed.retentionDays=7` (or desired days) |
 | **How it works** | The SDK creates the container with an explicit AVAD `ChangeFeedPolicy`. Retention = value you specify. |
+| **Which samples** | Use `ChangeFeedExtendedRetentionSample` to enable and verify extended retention. |
 
 ```properties
 # change-feed-cosmos-cloud.properties for a non-CB account:
@@ -974,10 +993,10 @@ multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
 multiclouddb.connection.key=<primary-master-key>
 multiclouddb.connection.connectionMode=gateway
 multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.changefeed.extendedRetentionDays=7
+multiclouddb.changefeed.retentionDays=7
 ```
 
-> **⚠️ Do NOT set `extendedRetentionDays` on a Continuous Backup account!**
+> **⚠️ Do NOT set `retentionDays` on a Continuous Backup account!**
 > Cosmos rejects explicit retention policies when CB is enabled. The sample
 > detects this and prints a clear error message with fix instructions.
 
@@ -985,21 +1004,22 @@ multiclouddb.changefeed.extendedRetentionDays=7
 
 | Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
 |----------|---------------------------------------------|--------------------------|
-| **Azure Cosmos DB** | Supported | Detects account type (CB vs non-CB) and proceeds accordingly. |
+| **Azure Cosmos DB** | Supported | Builds client with extended retention, provisions container, runs data-plane reads. |
 | **Google Cloud Spanner** | ⏳ Not yet supported | Change-feed support for Spanner is not yet available. |
 | **AWS DynamoDB** | ⏳ Not yet supported | Change-feed support for DynamoDB is not yet available. |
 
-> **This sample performs a full data-plane round-trip** — after detecting
-> your account type, it provisions a container, writes test items, and
-> consumes change events using multi-threaded cursor readers.
+> **This sample performs a full data-plane round-trip** — it provisions a
+> container, writes test items, and consumes change events using
+> multi-threaded cursor readers.
 
 ### Running `ChangeFeedExtendedRetentionSample`
 
 After building the fat jar (`mvn clean package -DskipTests`):
 
-> Requires a **live Continuous-Backup Cosmos account** — the emulator does
-> not support Continuous Backup and the sample will exit with an error if
-> it detects a localhost endpoint.
+> Requires a **live Cosmos account** (Periodic Backup) — the emulator does
+> not support extended retention and the sample will exit with an error if
+> it detects a localhost endpoint. CB accounts should use `ChangeFeedSample`
+> or `ChangeFeedWatcherSample` instead.
 
 **macOS / Linux:**
 
@@ -1007,8 +1027,8 @@ After building the fat jar (`mvn clean package -DskipTests`):
 # Copy template and fill in endpoint + key
 cp src/main/resources/change-feed-cosmos-cloud.properties.template \
    src/main/resources/change-feed-cosmos-cloud.properties
-# Edit to add your endpoint, key, and optionally:
-#   multiclouddb.changefeed.extendedRetentionDays=7
+# Edit to add your endpoint, key, and set retentionDays:
+#   multiclouddb.changefeed.retentionDays=7
 
 mvn clean package -DskipTests
 
@@ -1023,8 +1043,8 @@ java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
 # Copy template and fill in endpoint + key
 cp src\main\resources\change-feed-cosmos-cloud.properties.template `
    src\main\resources\change-feed-cosmos-cloud.properties
-# Edit to add your endpoint, key, and optionally:
-#   multiclouddb.changefeed.extendedRetentionDays=7
+# Edit to add your endpoint, key, and set retentionDays:
+#   multiclouddb.changefeed.retentionDays=7
 
 mvn clean package -DskipTests
 

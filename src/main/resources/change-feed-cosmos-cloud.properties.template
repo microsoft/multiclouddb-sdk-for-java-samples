@@ -51,23 +51,27 @@ multiclouddb.connection.connectionMode=gateway
 # HOW EXTENDED RETENTION WORKS:
 #
 #   Extended retention = reading changes older than 24 hours.
-#   This property is REQUIRED to run ChangeFeedExtendedRetentionSample.
+#   If omitted → ChangeFeedConfig.defaults() (24h baseline) — works on ALL providers.
+#   If set → SDK opts into extended retention via:
+#     ChangeFeedConfig.builder().extendedRetention(Duration.ofDays(N)).build()
 #
-#   There are TWO Cosmos DB account types, each with different behavior:
+#   The SDK fails fast if you set this on a provider that doesn't support it
+#   (e.g. DynamoDB). Leave it out for unsupported providers.
+#
+#   Cosmos DB account types:
 #
 #   Continuous Backup (CB) account:
 #     Account setup: Enable Continuous Backup (7d or 30d tier) in Azure Portal
 #                    → Cosmos account → Backup & Restore → Continuous
 #     Behavior:      AVAD is automatic. Retention = backup tier (7d or 30d).
 #     NOTE:          On CB accounts, Cosmos REJECTS explicit retention policies.
-#                    This sample will detect the error and explain the situation.
-#                    For CB accounts, use ChangeFeedSample/ChangeFeedWatcherSample
-#                    instead — they already benefit from extended retention.
+#                    Use ChangeFeedSample/ChangeFeedWatcherSample instead —
+#                    they already benefit from extended retention automatically.
 #
 #   Periodic Backup (non-CB) account:
 #     Account setup: No account-level change needed.
 #     Behavior:      The SDK creates the container with an explicit AVAD
 #                    ChangeFeedPolicy. Retention = the value you specify below.
 #
-# Set the number of days for extended retention (REQUIRED):
-multiclouddb.changefeed.extendedRetentionDays=7
+# Set the number of days for extended retention (REQUIRED for this sample):
+multiclouddb.changefeed.retentionDays=7
