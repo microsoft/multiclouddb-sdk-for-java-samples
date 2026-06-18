@@ -470,6 +470,7 @@ public class ChangeFeedExtendedRetentionSample {
             Thread consumer = new Thread(() -> {
                 ChangeFeedCursor cursor = startCursor;
                 long deadline = System.currentTimeMillis() + 30_000L;
+                int emptyPollsAfterWriter = 0;
                 try {
                     while (System.currentTimeMillis() < deadline) {
                         ChangeFeedPage page = client.readChanges(address, cursor);
@@ -477,10 +478,16 @@ public class ChangeFeedExtendedRetentionSample {
                             System.out.printf("  [cursor-%d] %-6s %s @ %s%n",
                                     cursorIndex, ev.type(), ev.key(), ev.commitTimestamp());
                             total.incrementAndGet();
+                            emptyPollsAfterWriter = 0; // reset on activity
                         }
                         cursor = page.nextCursor();
                         if (writerDone.get() && !page.hasMore()) {
-                            break;
+                            // Grace period: keep polling for a few seconds after
+                            // writer finishes to allow Cosmos change feed propagation
+                            emptyPollsAfterWriter++;
+                            if (emptyPollsAfterWriter > 20) { // ~5s grace
+                                break;
+                            }
                         }
                         if (!page.hasMore()) {
                             Thread.sleep(250);
