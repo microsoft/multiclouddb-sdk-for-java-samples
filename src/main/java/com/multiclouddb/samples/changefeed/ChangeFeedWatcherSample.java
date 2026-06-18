@@ -132,8 +132,8 @@ public class ChangeFeedWatcherSample {
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk())) {
 
             // Bail out early if the active provider doesn't support change feed.
-            // All three providers (Cosmos, DynamoDB, Spanner) declare
-            // Capability.CHANGE_FEED in the current SDK.
+            // Currently only Cosmos DB is supported; DynamoDB and Spanner
+            // change-feed support is not yet available.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 System.err.println("Change feed is not supported on "

@@ -1,27 +1,25 @@
 # Multicloud DB SDK — Change Feed Samples
 
-Three command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
-change feed** across Azure Cosmos DB, Google Cloud Spanner, and Amazon DynamoDB.
+Command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
+change feed** on Azure Cosmos DB.
+
+> **Note:** DynamoDB and Spanner change-feed support is not yet available.
+> These samples currently target Cosmos DB only.
 
 ## Provider Support Matrix
 
 | Sample | Azure Cosmos DB | Google Cloud Spanner | Amazon DynamoDB |
 |--------|:---------------:|:--------------------:|:---------------:|
-| **`ChangeFeedSample`** (one-shot) | ✅ Supported | ✅ Supported | ✅ Supported |
-| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported | ✅ Supported | ✅ Supported |
-| **`ChangeFeedExtendedRetentionSample`** (build-time gate) | ✅ Gate passes | ✅ Gate passes | ❌ Gate refuses (expected) |
+| **`ChangeFeedSample`** (one-shot) | ✅ Supported | ⏳ Not yet supported | ⏳ Not yet supported |
+| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported | ⏳ Not yet supported | ⏳ Not yet supported |
+| **`ChangeFeedExtendedRetentionSample`** (build-time gate) | ✅ Gate passes | ⏳ Not yet supported | ⏳ Not yet supported |
 
-> **Provider-specific prerequisites.** All three providers declare
-> `Capability.CHANGE_FEED` (as of SDK 0.1.0-beta.2), so the samples work
-> on any of them. However, each provider requires out-of-band setup before
-> the change feed is functional:
+> **Provider-specific prerequisites (Cosmos DB).**
 >
 > | Provider | Prerequisite |
 > |----------|-------------|
 > | **Cosmos DB (live)** | Account must have **Continuous Backup** enabled (AVAD is then automatic on every container). |
 > | **Cosmos DB (emulator)** | The sample auto-provisions an AVAD container with a 10-min retention policy (no manual setup). |
-> | **DynamoDB** | Table must have `StreamSpecification(NEW_AND_OLD_IMAGES)` enabled. |
-> | **Spanner** | A change stream must be created: `CREATE CHANGE STREAM <name> FOR <collection> OPTIONS(value_capture_type='NEW_ROW')`. |
 >
 > Without the prerequisite, `listCursors` / `readChanges` will surface a
 > portable `UNSUPPORTED_CAPABILITY(stream_not_enabled)` error.
@@ -32,7 +30,7 @@ change feed** across Azure Cosmos DB, Google Cloud Spanner, and Amazon DynamoDB.
 |--------|----------|------------|
 | **`ChangeFeedSample`** | One-shot demo: writer thread produces a fixed `CREATE` / `UPDATE` / `DELETE` sequence; consumer drains the feed; both exit. | Validating that change feed is wired up end-to-end. |
 | **`ChangeFeedWatcherSample`** | Long-running consumer with **no writes of its own**. Polls the change feed and prints each event as it arrives. `Ctrl+C` → final tally. | Observing changes you make manually in the Azure Portal Data Explorer (or any other writer). |
-| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos and Spanner (which declare `Capability.EXTENDED_CHANGE_FEED_HISTORY`); fails fast on DynamoDB with `UNSUPPORTED_CAPABILITY`. | Verifying which providers can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
+| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos (which declares `Capability.EXTENDED_CHANGE_FEED_HISTORY`). | Verifying that the provider can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
 
 The first two samples target the dedicated database/container
 `multiclouddb-sdk-for-java-changefeed/change-feed-demo` (configurable via
@@ -948,15 +946,15 @@ synchronous and happens in `MulticloudDbClientFactory.create(...)` —
 cannot lurk until the first `listCursors` / `readChanges` call.
 
 `ChangeFeedExtendedRetentionSample` demonstrates this build-time gate
-end-to-end on all three providers.
+on Cosmos DB.
 
 ### Per-provider behaviour
 
 | Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
 |----------|---------------------------------------------|--------------------------|
 | **Azure Cosmos DB** | Supported | `Client built successfully — capability gate passed.` Notes: *"Up to 30 days via Continuous Backup 30d tier; 7d minimum (AVAD requires Continuous Backup)."* |
-| **Google Cloud Spanner** | Supported | `Client built successfully — capability gate passed.` Notes: *"Default 24h; configurable up to 7d natively via `CREATE CHANGE STREAM ... OPTIONS(retention_period=...)`."* |
-| **AWS DynamoDB** | **Not supported** | Sample exits with code `1` and prints `Build-time gate REFUSED extended retention`. DynamoDB Streams is fixed at 24h server-side; an SDK-managed archive-on-read mechanism is on the v1.x roadmap. |
+| **Google Cloud Spanner** | ⏳ Not yet supported | Change-feed support for Spanner is not yet available. |
+| **AWS DynamoDB** | ⏳ Not yet supported | Change-feed support for DynamoDB is not yet available. |
 
 > **Scope of this sample.** The sample stops at the build-time gate on purpose.
 > Actually reading change events beyond the 24-hour baseline requires

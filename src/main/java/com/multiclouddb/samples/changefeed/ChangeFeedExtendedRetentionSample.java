@@ -59,13 +59,13 @@ import java.util.concurrent.atomic.AtomicInteger;
  *   </tr>
  *   <tr>
  *     <td>Google Cloud Spanner</td>
- *     <td>SUCCESS</td>
- *     <td>Default 24h; configurable up to 7d natively via {@code CREATE CHANGE STREAM ... OPTIONS(retention_period=...)}.</td>
+ *     <td>NOT YET SUPPORTED</td>
+ *     <td>Change-feed support for Spanner is not yet available.</td>
  *   </tr>
  *   <tr>
  *     <td>AWS DynamoDB</td>
- *     <td>FAIL FAST — {@code UNSUPPORTED_CAPABILITY} thrown by {@code create(...)}</td>
- *     <td>DynamoDB Streams is fixed at 24h server-side. SDK-managed archive-on-read is on the v1.x roadmap.</td>
+ *     <td>NOT YET SUPPORTED</td>
+ *     <td>Change-feed support for DynamoDB is not yet available.</td>
  *   </tr>
  * </table>
  *

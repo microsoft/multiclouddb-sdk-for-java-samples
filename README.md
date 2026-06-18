@@ -106,11 +106,11 @@ mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.todo.TodoApp \
 
 ### Change Feed Samples
 
-Three samples demonstrate the SDK's pull-mode change feed. The two data-plane
-samples target Azure Cosmos DB and use the dedicated database
+Three samples demonstrate the SDK's pull-mode change feed. The samples
+currently target **Azure Cosmos DB only** (DynamoDB and Spanner change-feed
+support is not yet available). They use the dedicated database
 `multiclouddb-sdk-for-java-changefeed` and container `change-feed-demo` (see
-`src/main/resources/change-feed-cosmos*.properties`). The third is a portable
-build-time gate demo and additionally accepts Spanner and DynamoDB configs.
+`src/main/resources/change-feed-cosmos*.properties`).
 
 > The change-feed sample sources live under
 > `src/main/java/com/multiclouddb/samples/changefeed/` and are in the
@@ -250,16 +250,6 @@ for the per-provider breakdown.
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# Spanner (should succeed)
-java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# DynamoDB (should fail fast — expected exit code 1)
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 
 **Windows (PowerShell):**
@@ -269,25 +259,7 @@ java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
 java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# Spanner (should succeed)
-java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# DynamoDB (should fail fast — expected exit code 1)
-java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
-
-**Spanner emulator / DynamoDB Local** — `ChangeFeedExtendedRetentionSample`
-works against the local emulators too, because the build-time gate runs
-before any wire I/O. The shipped `change-feed-spanner.properties` and
-`change-feed-dynamo.properties` configs are wired for the standard emulator
-endpoints (`localhost:9010` and `http://localhost:8000` respectively); see
-[`README-change-feed.md`](README-change-feed.md#emulator-setup) for the
-`docker run` commands and the full per-shell run table.
 
 Example output (after creating, then deleting an item in the portal):
 
@@ -323,10 +295,10 @@ Press Ctrl+C to stop.
 | `risk-platform-dynamo-cloud.properties.template` | DynamoDB (cloud) |
 | `change-feed-cosmos.properties` | Cosmos DB emulator (data-plane samples + extended-retention build-time gate) |
 | `change-feed-cosmos-cloud.properties.template` | Cosmos DB (cloud) — copy to `src/main/resources/change-feed-cosmos-cloud.properties` (gitignored), then fill in endpoint + key |
-| `change-feed-spanner.properties` | Google Cloud Spanner emulator (extended-retention build-time gate demo) |
-| `change-feed-spanner-cloud.properties.template` | Google Cloud Spanner (cloud) — copy to `src/main/resources/change-feed-spanner-cloud.properties` (gitignored), then fill in project + instance + database |
-| `change-feed-dynamo.properties` | Amazon DynamoDB Local (extended-retention build-time gate demo — gate refuses before any wire I/O) |
-| `change-feed-dynamo-cloud.properties.template` | Amazon DynamoDB (cloud) — copy to `src/main/resources/change-feed-dynamo-cloud.properties` (gitignored), then fill in region |
+| `change-feed-spanner.properties` | ⏳ Reserved for future Spanner change-feed support |
+| `change-feed-spanner-cloud.properties.template` | ⏳ Reserved for future Spanner change-feed support |
+| `change-feed-dynamo.properties` | ⏳ Reserved for future DynamoDB change-feed support |
+| `change-feed-dynamo-cloud.properties.template` | ⏳ Reserved for future DynamoDB change-feed support |
 
 ---
 
