@@ -149,14 +149,17 @@ public class ChangeFeedExtendedRetentionSample {
             return;
         }
 
-        // Compose the opted-in config on top of whatever ConfigLoader produced.
-        // ConfigLoader is provider-neutral and does not wire changeFeed(...),
-        // so the sample is responsible for adding the opt-in.
-        MulticloudDbClientConfig sdkConfig = withExtendedRetention(
-                appConfig.sdk(), REQUESTED_RETENTION);
-
-        System.out.println("--- Building client with extendedRetention("
-                + REQUESTED_RETENTION + ") ---");
+        // If the properties file includes multiclouddb.changefeed.extendedRetentionDays,
+        // ConfigLoader already wired the extended retention into the SDK config.
+        // Otherwise, apply the sample's default programmatically.
+        MulticloudDbClientConfig sdkConfig = appConfig.sdk();
+        if (sdkConfig.changeFeed() == null) {
+            sdkConfig = withExtendedRetention(sdkConfig, REQUESTED_RETENTION);
+            System.out.println("--- Building client with extendedRetention("
+                    + REQUESTED_RETENTION + ") [programmatic fallback] ---");
+        } else {
+            System.out.println("--- Building client with extendedRetention from config ---");
+        }
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
             // The build-time gate passed — the provider declares the capability.
             CapabilitySet caps = client.capabilities();

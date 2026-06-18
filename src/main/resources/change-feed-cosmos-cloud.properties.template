@@ -45,3 +45,10 @@ multiclouddb.connection.connectionMode=gateway
 # API) and throughput is controlled in the Azure Portal or via CLI:
 #   az cosmosdb sql container throughput update --throughput 30000 ...
 # multiclouddb.throughput=30000
+
+# --- Extended Retention (optional) -------------------------------------------
+# Set to enable extended change-feed retention (in days). When set, the SDK
+# opts into reading change events older than the 24-hour baseline.
+# Requires a Cosmos account with Continuous Backup enabled.
+# Omit or leave commented out for the default 24-hour baseline.
+# multiclouddb.changefeed.extendedRetentionDays=7
