@@ -139,13 +139,16 @@ public final class ConfigLoader {
         // Change-feed configuration (optional)
         // If retentionDays is set, opt into extended retention (> 24h baseline).
         // If omitted, ChangeFeedConfig.defaults() (24h) is used — works on ALL providers.
-        // Leave the property out for providers that don't support extended retention
-        // (e.g. DynamoDB). The SDK fails fast if you set it on an unsupported provider.
+        // Leave the property out for providers that don't support extended retention.
+        // The SDK fails fast if you set it on an unsupported provider.
         String retentionDays = props.getProperty("multiclouddb.changefeed.retentionDays");
         if (retentionDays != null && !retentionDays.isBlank()) {
             try {
                 long days = Long.parseLong(retentionDays.trim());
-                if (days > 0) {
+                if (days <= 0 || days > 365) {
+                    System.err.println("  WARNING: multiclouddb.changefeed.retentionDays="
+                            + retentionDays + " is out of range (1-365); ignoring.");
+                } else {
                     builder.changeFeed(ChangeFeedConfig.builder()
                             .extendedRetention(Duration.ofDays(days))
                             .build());

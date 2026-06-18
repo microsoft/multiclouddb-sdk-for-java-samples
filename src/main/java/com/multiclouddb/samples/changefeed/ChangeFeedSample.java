@@ -123,9 +123,7 @@ public class ChangeFeedSample {
 
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdkWithoutExtendedRetention())) {
 
-            // Bail out early if the active provider doesn't support change
-            // feed. Currently only Cosmos DB is supported; DynamoDB and
-            // Spanner change-feed support is not yet available.
+            // Bail out early if the active provider doesn't support change feed.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 log.error("Change feed is not supported on {}.", provider.displayName());
@@ -140,14 +138,6 @@ public class ChangeFeedSample {
             log.info("--- Provisioning '{}/{}' ---", database, collection);
             client.ensureDatabase(database);
             client.ensureContainer(address);
-
-            // DynamoDB workaround: ensureContainer() creates the table but
-            // does not enable DynamoDB Streams. Enable it now so listCursors
-            // can discover the stream.
-            if (ProviderId.DYNAMO.equals(provider)) {
-                String tableName = database + "__" + collection;
-                ChangeFeedSampleSupport.enableDynamoStreams(appConfig, tableName);
-            }
 
             // === 2. List cursors at the live tip ===
             // No events committed before this call will be surfaced.

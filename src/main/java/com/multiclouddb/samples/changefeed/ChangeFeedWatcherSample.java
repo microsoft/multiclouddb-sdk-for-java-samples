@@ -30,8 +30,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * Continuous change-feed watcher — keeps running until Ctrl+C and prints
  * every CREATE / UPDATE / DELETE event as it arrives. Use this to observe
  * the change feed while you add or delete items manually (e.g., from the
- * Azure Portal Data Explorer, the Cosmos emulator UI, the DynamoDB console,
- * the Spanner console, or another writer).
+ * Azure Portal Data Explorer or the Cosmos emulator UI).
+ * <p>
+ * <b>Note:</b> This sample currently supports <b>Azure Cosmos DB only</b>.
+ * DynamoDB and Spanner change-feed support is not yet available in this repo.
  * <p>
  * Unlike {@link ChangeFeedSample}, this watcher does not produce any writes
  * of its own — it only consumes.
@@ -41,16 +43,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * <pre>
  *   # Live Cosmos account (master-key auth)
  *   java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
- *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
- *
- *   # DynamoDB (local or cloud)
- *   java -Dmulticlouddb.config=change-feed-dynamo.properties \
- *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
- *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
- *
- *   # Spanner (emulator or cloud)
- *   java -Dmulticlouddb.config=change-feed-spanner.properties \
  *        -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
  *        com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
  *
@@ -68,9 +60,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * <h3>Try it</h3>
  * <ol>
  *   <li>Start the watcher. It prints "Watching … (press Ctrl+C to stop)".</li>
- *   <li>In the provider's console (Azure Portal Data Explorer, DynamoDB
- *       console, Spanner console) create, edit, or delete items in the
- *       target container/table.</li>
+ *   <li>In the Azure Portal Data Explorer (or the Cosmos emulator UI),
+ *       create, edit, or delete items in the target container.</li>
  *   <li>Watch the console — each operation surfaces as a
  *       {@code CREATE} / {@code UPDATE} / {@code DELETE} line within the
  *       poll interval, tagged with the cursor index.</li>
@@ -85,10 +76,6 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li><b>Cosmos emulator</b> — the watcher pre-provisions the AVAD
  *       container with a 10-minute retention (the emulator's hard ceiling)
  *       on first run.</li>
- *   <li><b>DynamoDB</b> — table needs {@code StreamSpecification(NEW_AND_OLD_IMAGES)}
- *       enabled.</li>
- *   <li><b>Spanner</b> — needs a change stream:
- *       {@code CREATE CHANGE STREAM ... OPTIONS(value_capture_type='NEW_ROW')}.</li>
  * </ul>
  */
 public class ChangeFeedWatcherSample {
@@ -142,8 +129,6 @@ public class ChangeFeedWatcherSample {
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdkWithoutExtendedRetention())) {
 
             // Bail out early if the active provider doesn't support change feed.
-            // Currently only Cosmos DB is supported; DynamoDB and Spanner
-            // change-feed support is not yet available.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 log.error("Change feed is not supported on {}.", provider.displayName());
@@ -153,14 +138,6 @@ public class ChangeFeedWatcherSample {
             log.info("--- Provisioning '{}/{}' ---", database, collection);
             client.ensureDatabase(database);
             client.ensureContainer(address);
-
-            // DynamoDB workaround: ensureContainer() creates the table but
-            // does not enable DynamoDB Streams. Enable it now so listCursors
-            // can discover the stream.
-            if (ProviderId.DYNAMO.equals(provider)) {
-                String tableName = database + "__" + collection;
-                ChangeFeedSampleSupport.enableDynamoStreams(appConfig, tableName);
-            }
 
             // Discover one cursor per feed range, positioned at the live tip.
             // Anything written BEFORE this call will not be surfaced.
@@ -209,7 +186,12 @@ public class ChangeFeedWatcherSample {
                             break;
                         } catch (Exception ex) {
                             log.error("  [cursor-{}] error: {}", cursorIndex, ex.getMessage());
-                            try { Thread.sleep(pollIntervalMs); } catch (InterruptedException ie) { break; }
+                            try {
+                                Thread.sleep(pollIntervalMs);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
                         }
                     }
                 }, "cursor-poller-" + cursorIndex);

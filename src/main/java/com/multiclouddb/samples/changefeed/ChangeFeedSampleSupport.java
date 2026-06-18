@@ -16,16 +16,6 @@ import com.azure.cosmos.models.ThroughputProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableRequest;
-import software.amazon.awssdk.services.dynamodb.model.DescribeTableResponse;
-import software.amazon.awssdk.services.dynamodb.model.StreamSpecification;
-import software.amazon.awssdk.services.dynamodb.model.StreamViewType;
-import software.amazon.awssdk.services.dynamodb.model.UpdateTableRequest;
-
 import java.net.URI;
 import java.time.Duration;
 
@@ -33,16 +23,9 @@ import java.time.Duration;
  * Helpers shared by the change-feed samples ({@link ChangeFeedSample},
  * {@link ChangeFeedWatcherSample}, and {@link ChangeFeedExtendedRetentionSample}).
  * <p>
- * The change-feed samples reach into provider-native SDKs directly for
- * provisioning workarounds:
- * <ul>
- *   <li><b>Cosmos emulator</b> — pre-provisions an AVAD container with an
- *       explicit {@link ChangeFeedPolicy} (the emulator does not support
- *       Continuous Backup).</li>
- *   <li><b>DynamoDB (Local or cloud)</b> — enables DynamoDB Streams with
- *       {@code NEW_AND_OLD_IMAGES} on the table if not already enabled
- *       (the SDK's {@code ensureContainer} does not enable streams).</li>
- * </ul>
+ * Currently only Azure Cosmos DB is supported. The helper pre-provisions an
+ * AVAD container with an explicit {@link ChangeFeedPolicy} on the local
+ * emulator (which does not support Continuous Backup).
  */
 final class ChangeFeedSampleSupport {
 
@@ -117,58 +100,6 @@ final class ChangeFeedSampleSupport {
                 log.info("  [provision] AVAD container '{}/{}' ready (emulator retention=10min). Note: existing containers are not retrofitted.",
                         database, collection);
             }
-        }
-    }
-
-    /**
-     * Ensure DynamoDB Streams is enabled on the table with
-     * {@code NEW_AND_OLD_IMAGES} stream view type. The SDK's
-     * {@code ensureContainer()} creates the table but does not enable
-     * streams, so the change-feed samples must do it out-of-band.
-     * <p>
-     * If streams are already enabled this is a no-op.
-     *
-     * @param tableName the DynamoDB table name (e.g. {@code local__change-feed-demo})
-     */
-    static void enableDynamoStreams(ConfigLoader.AppConfig appConfig, String tableName) {
-        String endpoint = appConfig.sdk().connection().get("endpoint");
-        String region = appConfig.sdk().connection().getOrDefault("region", "us-east-1");
-        String accessKey = appConfig.property("multiclouddb.auth.accessKeyId", null);
-        String secretKey = appConfig.property("multiclouddb.auth.secretAccessKey", null);
-
-        var builder = DynamoDbClient.builder()
-                .region(Region.of(region));
-
-        // Use explicit credentials only if provided (DynamoDB Local);
-        // otherwise fall back to the default AWS credential chain (cloud).
-        if (accessKey != null && secretKey != null) {
-            builder.credentialsProvider(StaticCredentialsProvider.create(
-                    AwsBasicCredentials.create(accessKey, secretKey)));
-        }
-        if (endpoint != null && !endpoint.isBlank()) {
-            builder.endpointOverride(URI.create(endpoint));
-        }
-
-        try (DynamoDbClient dynamo = builder.build()) {
-            // Check if streams are already enabled
-            DescribeTableResponse desc = dynamo.describeTable(
-                    DescribeTableRequest.builder().tableName(tableName).build());
-            StreamSpecification existing = desc.table().streamSpecification();
-            if (existing != null && Boolean.TRUE.equals(existing.streamEnabled())
-                    && StreamViewType.NEW_AND_OLD_IMAGES.equals(existing.streamViewType())) {
-                log.info("  [provision] DynamoDB Streams already enabled on '{}' (NEW_AND_OLD_IMAGES)", tableName);
-                return;
-            }
-
-            // Enable streams
-            dynamo.updateTable(UpdateTableRequest.builder()
-                    .tableName(tableName)
-                    .streamSpecification(StreamSpecification.builder()
-                            .streamEnabled(true)
-                            .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)
-                            .build())
-                    .build());
-            log.info("  [provision] Enabled DynamoDB Streams on '{}' (NEW_AND_OLD_IMAGES)", tableName);
         }
     }
 }

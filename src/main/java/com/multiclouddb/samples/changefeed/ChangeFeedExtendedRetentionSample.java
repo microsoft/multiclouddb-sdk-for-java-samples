@@ -129,7 +129,7 @@ public class ChangeFeedExtendedRetentionSample {
         // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
         if (!ProviderId.COSMOS.equals(provider)) {
             System.err.println("ERROR: Change-feed samples currently support Cosmos DB only.");
-            System.err.println("DynamoDB and Spanner change-feed support is not yet available.");
+            System.err.println("Other providers are not yet supported. Set multiclouddb.provider=cosmos.");
             System.exit(1);
             return;
         }
@@ -201,9 +201,8 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println("║    ChangeFeedConfig.builder()                                    ║");
         System.out.println("║        .extendedRetention(Duration.ofDays(N)).build()            ║");
         System.out.println("║                                                                  ║");
-        System.out.println("║  Leave the property OUT for providers that don't support it      ║");
-        System.out.println("║  (e.g. DynamoDB). The SDK fails fast if you set it on an         ║");
-        System.out.println("║  unsupported provider.                                           ║");
+        System.out.println("║  Leave the property OUT for providers that don't support it.     ║");
+        System.out.println("║  The SDK fails fast if you set it on an unsupported provider.    ║");
         System.out.println("║                                                                  ║");
         System.out.println("╚══════════════════════════════════════════════════════════════════╝");
         System.out.println();
