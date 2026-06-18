@@ -13,6 +13,9 @@ import com.azure.cosmos.models.ChangeFeedPolicy;
 import com.azure.cosmos.models.CosmosContainerProperties;
 import com.azure.cosmos.models.ThroughputProperties;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
@@ -42,6 +45,8 @@ import java.time.Duration;
  * </ul>
  */
 final class ChangeFeedSampleSupport {
+
+    private static final Logger log = LoggerFactory.getLogger(ChangeFeedSampleSupport.class);
 
     private ChangeFeedSampleSupport() {
     }
@@ -105,13 +110,12 @@ final class ChangeFeedSampleSupport {
             if (throughputRU > 0) {
                 cosmos.getDatabase(database).createContainerIfNotExists(
                         props, ThroughputProperties.createManualThroughput(throughputRU));
-                System.out.println("  [provision] AVAD container '" + database + "/" + collection
-                        + "' ready (emulator retention=10min, throughput=" + throughputRU
-                        + " RU/s). Note: existing containers are not retrofitted.");
+                log.info("  [provision] AVAD container '{}/{}' ready (emulator retention=10min, throughput={} RU/s). Note: existing containers are not retrofitted.",
+                        database, collection, throughputRU);
             } else {
                 cosmos.getDatabase(database).createContainerIfNotExists(props);
-                System.out.println("  [provision] AVAD container '" + database + "/" + collection
-                        + "' ready (emulator retention=10min). Note: existing containers are not retrofitted.");
+                log.info("  [provision] AVAD container '{}/{}' ready (emulator retention=10min). Note: existing containers are not retrofitted.",
+                        database, collection);
             }
         }
     }
@@ -152,8 +156,7 @@ final class ChangeFeedSampleSupport {
             StreamSpecification existing = desc.table().streamSpecification();
             if (existing != null && Boolean.TRUE.equals(existing.streamEnabled())
                     && StreamViewType.NEW_AND_OLD_IMAGES.equals(existing.streamViewType())) {
-                System.out.println("  [provision] DynamoDB Streams already enabled on '"
-                        + tableName + "' (NEW_AND_OLD_IMAGES)");
+                log.info("  [provision] DynamoDB Streams already enabled on '{}' (NEW_AND_OLD_IMAGES)", tableName);
                 return;
             }
 
@@ -165,8 +168,7 @@ final class ChangeFeedSampleSupport {
                             .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)
                             .build())
                     .build());
-            System.out.println("  [provision] Enabled DynamoDB Streams on '"
-                    + tableName + "' (NEW_AND_OLD_IMAGES)");
+            log.info("  [provision] Enabled DynamoDB Streams on '{}' (NEW_AND_OLD_IMAGES)", tableName);
         }
     }
 }

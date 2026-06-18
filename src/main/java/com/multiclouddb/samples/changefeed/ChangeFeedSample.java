@@ -16,6 +16,9 @@ import com.multiclouddb.api.changefeed.ChangeEvent;
 import com.multiclouddb.api.changefeed.ChangeFeedCursor;
 import com.multiclouddb.api.changefeed.ChangeFeedPage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +80,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ChangeFeedSample {
 
+    private static final Logger log = LoggerFactory.getLogger(ChangeFeedSample.class);
+
     private static final String DEFAULT_CONFIG = "change-feed-cosmos.properties";
     private static final String DEFAULT_DATABASE = "multiclouddb-sdk-for-java-changefeed";
     private static final String DEFAULT_COLLECTION = "change-feed-demo";
@@ -86,22 +91,20 @@ public class ChangeFeedSample {
         ConfigLoader.AppConfig appConfig = ConfigLoader.load(DEFAULT_CONFIG);
         ProviderId provider = appConfig.sdk().provider();
 
-        System.out.println("=== Multicloud DB Change Feed Sample ===");
-        System.out.println("Provider: " + provider.displayName());
+        log.info("=== Multicloud DB Change Feed Sample ===");
+        log.info("Provider: {}", provider.displayName());
 
         // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
         if (!ProviderId.COSMOS.equals(provider)) {
-            System.err.println();
-            System.err.println("ERROR: Change-feed samples currently support Cosmos DB only.");
-            System.err.println("DynamoDB and Spanner change-feed support is not yet available.");
+            log.error("Change-feed samples currently support Cosmos DB only.");
+            log.error("DynamoDB and Spanner change-feed support is not yet available.");
             System.exit(1);
             return;
         }
 
         boolean isCosmosEmulator = ChangeFeedSampleSupport.isLocalEndpoint(
                 appConfig.sdk().connection().get("endpoint"));
-        System.out.println("Mode    : " + (isCosmosEmulator ? "EMULATOR" : "LIVE"));
-        System.out.println();
+        log.info("Mode    : {}", isCosmosEmulator ? "EMULATOR" : "LIVE");
 
         String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
         String collection = appConfig.property("multiclouddb.collection", DEFAULT_COLLECTION);
@@ -126,8 +129,7 @@ public class ChangeFeedSample {
             // Spanner change-feed support is not yet available.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
-                System.err.println("Change feed is not supported on "
-                        + provider.displayName() + ".");
+                log.error("Change feed is not supported on {}.", provider.displayName());
                 return;
             }
 
@@ -136,7 +138,7 @@ public class ChangeFeedSample {
             // container — AVAD is available automatically because CB is
             // enabled at the account level. On the emulator the container
             // was already created above and this is a no-op verification.
-            System.out.println("--- Provisioning '" + database + "/" + collection + "' ---");
+            log.info("--- Provisioning '{}/{}' ---", database, collection);
             client.ensureDatabase(database);
             client.ensureContainer(address);
 
@@ -147,24 +149,22 @@ public class ChangeFeedSample {
                 String tableName = database + "__" + collection;
                 ChangeFeedSampleSupport.enableDynamoStreams(appConfig, tableName);
             }
-            System.out.println();
 
             // === 2. List cursors at the live tip ===
             // No events committed before this call will be surfaced.
-            System.out.println("--- listCursors (live tip) ---");
+            log.info("--- listCursors (live tip) ---");
             List<ChangeFeedCursor> cursors = client.listCursors(address);
-            System.out.println("  Discovered " + cursors.size() + " partition cursor(s)");
+            log.info("  Discovered {} partition cursor(s)", cursors.size());
             for (int i = 0; i < cursors.size(); i++) {
                 String token = cursors.get(i).toToken();
-                System.out.println("  cursor-" + i + ": " + token.substring(0, Math.min(80, token.length())) + "…");
+                log.info("  cursor-{}: {}…", i, token.substring(0, Math.min(80, token.length())));
             }
             if (cursors.isEmpty()) {
-                System.err.println("  No partition cursors returned. The container exists but the "
+                log.error("  No partition cursors returned. The container exists but the "
                         + "provider did not report any feed ranges — likely a configuration or "
                         + "change-feed-mode mismatch. Aborting sample.");
                 return;
             }
-            System.out.println();
 
             // === 3. Spawn a writer thread that produces CREATE/UPDATE/DELETE events ===
             AtomicBoolean writerDone = new AtomicBoolean(false);
@@ -174,31 +174,27 @@ public class ChangeFeedSample {
             writer.start();
 
             // === 4. Drain change events until the writer is done AND every cursor is caught up ===
-            System.out.println("--- readChanges (consuming events) ---");
+            log.info("--- readChanges (consuming events) ---");
             int totalEvents = drainAll(client, address, cursors, writerDone);
             writer.join();
-            System.out.println();
-            System.out.println("  Total events observed: " + totalEvents);
-            System.out.println();
+            log.info("  Total events observed: {}", totalEvents);
 
             // === 5. Cursor-token round-trip: persist + resume ===
-            System.out.println("--- Cursor token round-trip ---");
+            log.info("--- Cursor token round-trip ---");
             List<ChangeFeedCursor> tipCursors = client.listCursors(address);
             if (tipCursors.isEmpty()) {
-                System.err.println("  No partition cursors returned; skipping token round-trip.");
+                log.error("  No partition cursors returned; skipping token round-trip.");
             } else {
                 ChangeFeedCursor liveTip = tipCursors.get(0);
                 String token = liveTip.toToken();
-                System.out.println("  Persisted token (truncated): " + token.substring(0, Math.min(60, token.length())) + "...");
+                log.info("  Persisted token (truncated): {}...", token.substring(0, Math.min(60, token.length())));
                 ChangeFeedCursor resumed = ChangeFeedCursor.fromToken(token);
                 ChangeFeedPage page = client.readChanges(address, resumed);
-                System.out.println("  Resumed cursor read " + page.events().size()
-                        + " event(s); hasMore=" + page.hasMore()
-                        + ", terminal=" + page.isTerminal());
+                log.info("  Resumed cursor read {} event(s); hasMore={}, terminal={}",
+                        page.events().size(), page.hasMore(), page.isTerminal());
             }
 
-            System.out.println();
-            System.out.println("=== Sample complete ===");
+            log.info("=== Sample complete ===");
         }
     }
 
@@ -209,8 +205,7 @@ public class ChangeFeedSample {
         try {
             return Integer.parseInt(raw.trim());
         } catch (NumberFormatException nfe) {
-            System.err.println("multiclouddb.throughput=" + raw
-                    + " is not a valid integer; using Cosmos default.");
+            log.warn("multiclouddb.throughput={} is not a valid integer; using Cosmos default.", raw);
             return 0;
         }
     }
@@ -231,14 +226,14 @@ public class ChangeFeedSample {
                         "title", "Event " + i,
                         "iteration", i);
                 client.upsert(address, key, doc);
-                System.out.println("  [writer] upsert cf-" + i);
+                log.info("  [writer] upsert cf-{}", i);
                 Thread.sleep(200);
             }
 
             // One UPDATE on cf-1 to demonstrate the UPDATE event type.
             MulticloudDbKey first = MulticloudDbKey.of("cf-1", "cf-1");
             client.upsert(address, first, Map.of("title", "Event 1 (updated)", "iteration", 99));
-            System.out.println("  [writer] update cf-1");
+            log.info("  [writer] update cf-1");
             Thread.sleep(200);
 
             // One DELETE to demonstrate the DELETE event type. DELETE events
@@ -246,7 +241,7 @@ public class ChangeFeedSample {
             // emulator pre-provisioning above (Cosmos emulator path) or
             // implicitly via Continuous Backup (live Cosmos path).
             client.delete(address, first);
-            System.out.println("  [writer] delete cf-1");
+            log.info("  [writer] delete cf-1");
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         } finally {
@@ -279,8 +274,10 @@ public class ChangeFeedSample {
                     while (System.currentTimeMillis() < deadline) {
                         ChangeFeedPage page = client.readChanges(address, cursor);
                         for (ChangeEvent ev : page.events()) {
-                            System.out.printf("  [cursor-%d] %-6s %s @ %s%n",
-                                    cursorIndex, ev.type(), ev.key(), ev.commitTimestamp());
+                            log.info("  [cursor-{}] {} {} @ {}",
+                                    cursorIndex,
+                                    String.format("%-6s", ev.type()),
+                                    ev.key(), ev.commitTimestamp());
                             total.incrementAndGet();
                         }
                         cursor = page.nextCursor();
@@ -302,7 +299,7 @@ public class ChangeFeedSample {
             consumer.start();
         }
 
-        System.out.println("  Started " + consumers.size() + " parallel consumer thread(s).");
+        log.info("  Started {} parallel consumer thread(s).", consumers.size());
         allDone.await();
         return total.get();
     }

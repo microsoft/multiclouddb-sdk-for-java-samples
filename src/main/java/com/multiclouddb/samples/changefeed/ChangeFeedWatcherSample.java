@@ -16,6 +16,9 @@ import com.multiclouddb.api.changefeed.ChangeEvent;
 import com.multiclouddb.api.changefeed.ChangeFeedCursor;
 import com.multiclouddb.api.changefeed.ChangeFeedPage;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -90,6 +93,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ChangeFeedWatcherSample {
 
+    private static final Logger log = LoggerFactory.getLogger(ChangeFeedWatcherSample.class);
+
     private static final String DEFAULT_CONFIG = "change-feed-cosmos.properties";
     private static final String DEFAULT_DATABASE = "multiclouddb-sdk-for-java-changefeed";
     private static final String DEFAULT_COLLECTION = "change-feed-demo";
@@ -103,28 +108,26 @@ public class ChangeFeedWatcherSample {
         ConfigLoader.AppConfig appConfig = ConfigLoader.load(DEFAULT_CONFIG);
         ProviderId provider = appConfig.sdk().provider();
 
-        System.out.println("=== Multicloud DB Change Feed Watcher ===");
-        System.out.println("Provider     : " + provider.displayName());
+        log.info("=== Multicloud DB Change Feed Watcher ===");
+        log.info("Provider     : {}", provider.displayName());
 
         // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
         if (!ProviderId.COSMOS.equals(provider)) {
-            System.err.println();
-            System.err.println("ERROR: Change-feed samples currently support Cosmos DB only.");
-            System.err.println("DynamoDB and Spanner change-feed support is not yet available.");
+            log.error("Change-feed samples currently support Cosmos DB only.");
+            log.error("DynamoDB and Spanner change-feed support is not yet available.");
             System.exit(1);
             return;
         }
 
         boolean isCosmosEmulator = ChangeFeedSampleSupport.isLocalEndpoint(
                 appConfig.sdk().connection().get("endpoint"));
-        System.out.println("Mode         : " + (isCosmosEmulator ? "EMULATOR" : "LIVE"));
+        log.info("Mode         : {}", isCosmosEmulator ? "EMULATOR" : "LIVE");
 
         String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
         String collection = appConfig.property("multiclouddb.collection", DEFAULT_COLLECTION);
         ResourceAddress address = new ResourceAddress(database, collection);
-        System.out.println("Container    : " + database + "/" + collection);
-        System.out.println("Poll interval: " + pollIntervalMs + " ms");
-        System.out.println();
+        log.info("Container    : {}/{}", database, collection);
+        log.info("Poll interval: {} ms", pollIntervalMs);
 
         if (isCosmosEmulator) {
             int throughputRU = parseThroughputRU(
@@ -143,12 +146,11 @@ public class ChangeFeedWatcherSample {
             // change-feed support is not yet available.
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
-                System.err.println("Change feed is not supported on "
-                        + provider.displayName() + ".");
+                log.error("Change feed is not supported on {}.", provider.displayName());
                 return;
             }
 
-            System.out.println("--- Provisioning '" + database + "/" + collection + "' ---");
+            log.info("--- Provisioning '{}/{}' ---", database, collection);
             client.ensureDatabase(database);
             client.ensureContainer(address);
 
@@ -159,27 +161,24 @@ public class ChangeFeedWatcherSample {
                 String tableName = database + "__" + collection;
                 ChangeFeedSampleSupport.enableDynamoStreams(appConfig, tableName);
             }
-            System.out.println();
 
             // Discover one cursor per feed range, positioned at the live tip.
             // Anything written BEFORE this call will not be surfaced.
             List<ChangeFeedCursor> cursors = new ArrayList<>(client.listCursors(address));
-            System.out.println("Discovered " + cursors.size() + " partition cursor(s) at the live tip.");
+            log.info("Discovered {} partition cursor(s) at the live tip.", cursors.size());
             for (int i = 0; i < cursors.size(); i++) {
                 String token = cursors.get(i).toToken();
-                System.out.println("  cursor-" + i + ": " + token.substring(0, Math.min(80, token.length())) + "…");
+                log.info("  cursor-{}: {}…", i, token.substring(0, Math.min(80, token.length())));
             }
             if (cursors.isEmpty()) {
-                System.err.println("No partition cursors returned. The container exists but the "
+                log.error("No partition cursors returned. The container exists but the "
                         + "provider did not report any feed ranges — likely a configuration or "
                         + "change-feed-mode mismatch. Aborting watcher.");
                 return;
             }
-            System.out.println();
-            System.out.println("Watching " + database + "/" + collection
-                    + " — go add/update/delete items (e.g., in the Azure Portal Data Explorer).");
-            System.out.println("Press Ctrl+C to stop.");
-            System.out.println();
+            log.info("Watching {}/{} — go add/update/delete items (e.g., in the Azure Portal Data Explorer).",
+                    database, collection);
+            log.info("Press Ctrl+C to stop.");
 
             // === Multi-threaded consumption: one thread per cursor ===
             // Each cursor (physical partition) gets its own polling thread.
@@ -209,7 +208,7 @@ public class ChangeFeedWatcherSample {
                             Thread.currentThread().interrupt();
                             break;
                         } catch (Exception ex) {
-                            System.err.println("  [cursor-" + cursorIndex + "] error: " + ex.getMessage());
+                            log.error("  [cursor-{}] error: {}", cursorIndex, ex.getMessage());
                             try { Thread.sleep(pollIntervalMs); } catch (InterruptedException ie) { break; }
                         }
                     }
@@ -221,8 +220,7 @@ public class ChangeFeedWatcherSample {
 
             // Wait for all poller threads to start
             started.await();
-            System.out.println("Started " + pollers.size() + " parallel cursor poller(s).");
-            System.out.println();
+            log.info("Started {} parallel cursor poller(s).", pollers.size());
 
             // Graceful shutdown: Ctrl+C interrupts all poller threads
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -238,9 +236,8 @@ public class ChangeFeedWatcherSample {
             } finally {
                 shutdown.set(true);
                 for (Thread t : pollers) t.interrupt();
-                System.out.println();
-                System.out.println("--- Stopping watcher ---");
-                System.out.println("Total events observed: " + totalEvents.get());
+                log.info("--- Stopping watcher ---");
+                log.info("Total events observed: {}", totalEvents.get());
             }
         }
     }
@@ -257,15 +254,13 @@ public class ChangeFeedWatcherSample {
         try {
             long v = Long.parseLong(raw.trim());
             if (v < 1L) {
-                System.err.println("changefeed.poll.intervalMs=" + raw
-                        + " is < 1; clamping to 1 ms.");
+                log.warn("changefeed.poll.intervalMs={} is < 1; clamping to 1 ms.", raw);
                 return 1L;
             }
             return v;
         } catch (NumberFormatException nfe) {
-            System.err.println("changefeed.poll.intervalMs=" + raw
-                    + " is not a valid long; using default "
-                    + DEFAULT_POLL_INTERVAL_MS + " ms.");
+            log.warn("changefeed.poll.intervalMs={} is not a valid long; using default {} ms.",
+                    raw, DEFAULT_POLL_INTERVAL_MS);
             return DEFAULT_POLL_INTERVAL_MS;
         }
     }
@@ -280,8 +275,7 @@ public class ChangeFeedWatcherSample {
         try {
             return Integer.parseInt(raw.trim());
         } catch (NumberFormatException nfe) {
-            System.err.println("multiclouddb.throughput=" + raw
-                    + " is not a valid integer; using Cosmos default.");
+            log.warn("multiclouddb.throughput={} is not a valid integer; using Cosmos default.", raw);
             return 0;
         }
     }
@@ -299,6 +293,6 @@ public class ChangeFeedWatcherSample {
             if (json.length() > 400) json = json.substring(0, 400) + "…";
             sb.append("  ").append(json);
         }
-        System.out.println(sb);
+        log.info("{}", sb);
     }
 }
