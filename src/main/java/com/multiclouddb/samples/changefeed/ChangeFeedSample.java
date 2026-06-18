@@ -88,12 +88,19 @@ public class ChangeFeedSample {
 
         System.out.println("=== Multicloud DB Change Feed Sample ===");
         System.out.println("Provider: " + provider.displayName());
-        boolean isCosmos = ProviderId.COSMOS.equals(provider);
-        boolean isCosmosEmulator = isCosmos && ChangeFeedSampleSupport.isLocalEndpoint(
-                appConfig.sdk().connection().get("endpoint"));
-        if (isCosmos) {
-            System.out.println("Mode    : " + (isCosmosEmulator ? "EMULATOR" : "LIVE"));
+
+        // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
+        if (!ProviderId.COSMOS.equals(provider)) {
+            System.err.println();
+            System.err.println("ERROR: Change-feed samples currently support Cosmos DB only.");
+            System.err.println("DynamoDB and Spanner change-feed support is not yet available.");
+            System.exit(1);
+            return;
         }
+
+        boolean isCosmosEmulator = ChangeFeedSampleSupport.isLocalEndpoint(
+                appConfig.sdk().connection().get("endpoint"));
+        System.out.println("Mode    : " + (isCosmosEmulator ? "EMULATOR" : "LIVE"));
         System.out.println();
 
         String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);

@@ -92,11 +92,8 @@ public class ChangeFeedExtendedRetentionSample {
 
     /**
      * 7 days — strictly greater than the 24-hour portable baseline (so the
-     * extended-retention opt-in is actually triggered) and at-or-below every
-     * supported provider's native ceiling: Cosmos honours up to 30d via the
-     * Continuous Backup 30d tier, and Spanner caps at 7d natively. This is
-     * the largest window that succeeds on both providers without provider-
-     * specific overrides.
+     * extended-retention opt-in is actually triggered) and within the Cosmos
+     * DB Continuous Backup 30d tier ceiling.
      */
     private static final Duration REQUESTED_RETENTION = Duration.ofDays(7);
 
@@ -123,6 +120,16 @@ public class ChangeFeedExtendedRetentionSample {
 
         System.out.println("=== Multicloud DB Change Feed — Extended Retention Sample ===");
         System.out.println("Provider          : " + provider.displayName());
+
+        // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
+        if (!ProviderId.COSMOS.equals(provider)) {
+            System.err.println();
+            System.err.println("ERROR: Change-feed samples currently support Cosmos DB only.");
+            System.err.println("DynamoDB and Spanner change-feed support is not yet available.");
+            System.exit(1);
+            return;
+        }
+
         System.out.println("Requested window  : " + REQUESTED_RETENTION + " (baseline is 24h)");
         System.out.println();
 
