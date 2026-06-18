@@ -10,8 +10,6 @@ import com.multiclouddb.api.CapabilitySet;
 import com.multiclouddb.api.MulticloudDbClient;
 import com.multiclouddb.api.MulticloudDbClientConfig;
 import com.multiclouddb.api.MulticloudDbClientFactory;
-import com.multiclouddb.api.MulticloudDbErrorCategory;
-import com.multiclouddb.api.MulticloudDbException;
 import com.multiclouddb.api.MulticloudDbKey;
 import com.multiclouddb.api.ProviderId;
 import com.multiclouddb.api.ResourceAddress;
@@ -206,11 +204,13 @@ public class ChangeFeedExtendedRetentionSample {
 
     /**
      * Build client with extended retention, provision container, and run
-     * data-plane reads. Handles CB vs non-CB account errors gracefully.
+     * data-plane reads. Uses a plain client for provisioning (to avoid CB
+     * conflicts), then the extended-retention client for reading.
      */
     private static void runWithExtendedRetention(ConfigLoader.AppConfig appConfig,
                                                  MulticloudDbClientConfig sdkConfig,
                                                  Duration retentionWindow) throws Exception {
+        // Step 1: Build the extended-retention client (capability gate check)
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
             CapabilitySet caps = client.capabilities();
             Capability cap = caps.get(Capability.EXTENDED_CHANGE_FEED_HISTORY);
@@ -224,76 +224,35 @@ public class ChangeFeedExtendedRetentionSample {
                 System.out.println("  Notes     : " + cap.notes());
             }
             System.out.println();
+        }
 
-            runDataPlane(client, appConfig, DEFAULT_COLLECTION);
-        } catch (MulticloudDbException ex) {
-            if (ex.error() != null
-                    && MulticloudDbErrorCategory.UNSUPPORTED_CAPABILITY.equals(ex.error().category())) {
-                Map<String, String> details = ex.error().providerDetails();
-                String reason = details != null ? details.getOrDefault("reason", "") : "";
-                String message = ex.error().message() != null ? ex.error().message() : "";
+        // Step 2: Provision container using a plain client (no extended retention)
+        // On CB accounts, AVAD is automatic — setting explicit retention is rejected.
+        // On non-CB accounts, ensureContainer creates a plain container.
+        String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
+        ResourceAddress address = new ResourceAddress(database, DEFAULT_COLLECTION);
 
-                System.err.println();
-                System.err.println("--- Extended retention REFUSED ---");
-                System.err.println("  Provider : " + appConfig.sdk().provider().displayName());
-                System.err.println("  Category : " + ex.error().category());
-                System.err.println("  Message  : " + message);
-                if (details != null && !details.isEmpty()) {
-                    System.err.println("  Details  : " + details);
-                }
-                System.err.println();
+        System.out.println("--- Provisioning '" + database + "/" + DEFAULT_COLLECTION + "' ---");
+        try (MulticloudDbClient provisionClient = MulticloudDbClientFactory.create(
+                appConfig.sdkWithoutExtendedRetention())) {
+            provisionClient.ensureDatabase(database);
+            provisionClient.ensureContainer(address);
+        }
+        System.out.println("  Container ready.");
+        System.out.println();
 
-                // Detect CB account conflict
-                if (message.contains("continuous backup mode is enabled")
-                        || message.contains("Continuous Backup")
-                        || reason.contains("continuous_backup_required")) {
-                    System.err.println("╔══════════════════════════════════════════════════════════════╗");
-                    System.err.println("║  YOUR ACCOUNT HAS CONTINUOUS BACKUP ENABLED                 ║");
-                    System.err.println("╠══════════════════════════════════════════════════════════════╣");
-                    System.err.println("║                                                              ║");
-                    System.err.println("║  On CB accounts, AVAD change feed is AUTOMATIC on every     ║");
-                    System.err.println("║  container. Retention is controlled by the backup tier       ║");
-                    System.err.println("║  (7d or 30d), NOT by the retentionDays property.            ║");
-                    System.err.println("║                                                              ║");
-                    System.err.println("║  The SDK cannot set an explicit retention policy on a CB     ║");
-                    System.err.println("║  account — Cosmos rejects it. This is expected behavior.    ║");
-                    System.err.println("║                                                              ║");
-                    System.err.println("║  On a CB account, use ChangeFeedSample or                    ║");
-                    System.err.println("║  ChangeFeedWatcherSample instead — they already benefit     ║");
-                    System.err.println("║  from extended retention automatically.                      ║");
-                    System.err.println("║                                                              ║");
-                    System.err.println("║  This sample (explicit opt-in) is for Periodic Backup       ║");
-                    System.err.println("║  accounts only.                                              ║");
-                    System.err.println("║                                                              ║");
-                    System.err.println("╚══════════════════════════════════════════════════════════════╝");
-                } else if (reason.contains("not_enacted")) {
-                    System.err.println("FIX: The container already exists with a different retention policy.");
-                    System.err.println("     Delete the container and re-run, or use a fresh container name.");
-                } else {
-                    System.err.println("The provider does not support extended retention.");
-                }
-                System.exit(1);
-                return;
-            }
-            throw ex;
+        // Step 3: Use the extended-retention client for data-plane reads
+        try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
+            runDataPlane(client, address);
         }
     }
 
     /**
-     * Data-plane round-trip: provision container, write items, consume events
-     * with multi-threaded cursor readers.
+     * Data-plane round-trip: write items, consume events with multi-threaded
+     * cursor readers.
      */
     private static void runDataPlane(MulticloudDbClient client,
-                                     ConfigLoader.AppConfig appConfig,
-                                     String collection) throws Exception {
-        String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
-        ResourceAddress address = new ResourceAddress(database, collection);
-
-        System.out.println("--- Provisioning '" + database + "/" + collection + "' ---");
-        client.ensureDatabase(database);
-        client.ensureContainer(address);
-        System.out.println();
-
+                                     ResourceAddress address) throws Exception {
         // List cursors at the live tip
         System.out.println("--- listCursors (live tip) ---");
         List<ChangeFeedCursor> cursors = client.listCursors(address);
