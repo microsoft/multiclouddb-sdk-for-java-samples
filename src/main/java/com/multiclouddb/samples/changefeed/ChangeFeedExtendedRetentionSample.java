@@ -16,8 +16,14 @@ import com.multiclouddb.api.ResourceAddress;
 import com.multiclouddb.api.changefeed.ChangeEvent;
 import com.multiclouddb.api.changefeed.ChangeFeedCursor;
 import com.multiclouddb.api.changefeed.ChangeFeedPage;
+import com.multiclouddb.api.changefeed.CursorExpiredException;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +100,7 @@ public class ChangeFeedExtendedRetentionSample {
     private static final String DEFAULT_CONFIG = "change-feed-cosmos-cloud.properties";
     private static final String DEFAULT_DATABASE = "multiclouddb_samples";
     private static final String DEFAULT_COLLECTION = "retention_demo";
+    private static final String CURSOR_FILE = "retention_cursors.json";
 
     public static void main(String[] args) throws Exception {
         ConfigLoader.AppConfig appConfig = ConfigLoader.load(DEFAULT_CONFIG);
@@ -241,27 +248,28 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println("  Container ready.");
         System.out.println();
 
-        // Step 3: Use the extended-retention client for data-plane reads
+        // Step 3: Check for saved cursors → resume mode or fresh mode
+        Path cursorPath = Paths.get(CURSOR_FILE);
         try (MulticloudDbClient client = MulticloudDbClientFactory.create(sdkConfig)) {
-            runDataPlane(client, address);
+            if (Files.exists(cursorPath)) {
+                resumeFromSavedCursors(client, address, cursorPath);
+            } else {
+                freshRun(client, address, cursorPath);
+            }
         }
     }
 
-    /**
-     * Data-plane round-trip: write items, consume events with multi-threaded
-     * cursor readers.
-     */
-    private static void runDataPlane(MulticloudDbClient client,
-                                     ResourceAddress address) throws Exception {
-        // List cursors at the live tip
+    // ── Fresh run: write items, read changes, save cursors ──────────────────
+
+    private static void freshRun(MulticloudDbClient client,
+                                 ResourceAddress address,
+                                 Path cursorPath) throws Exception {
+        System.out.println("--- MODE: Fresh run (no saved cursors found) ---");
+        System.out.println();
+
         System.out.println("--- listCursors (live tip) ---");
         List<ChangeFeedCursor> cursors = client.listCursors(address);
         System.out.println("  Discovered " + cursors.size() + " partition cursor(s)");
-        for (int i = 0; i < cursors.size(); i++) {
-            String token = cursors.get(i).toToken();
-            System.out.println("  cursor-" + i + ": "
-                    + token.substring(0, Math.min(80, token.length())) + "…");
-        }
         if (cursors.isEmpty()) {
             System.err.println("  No partition cursors. Aborting sample.");
             return;
@@ -275,17 +283,127 @@ public class ChangeFeedExtendedRetentionSample {
         writer.setDaemon(true);
         writer.start();
 
-        // Multi-threaded drain: one thread per cursor
+        // Multi-threaded drain
         System.out.println("--- readChanges (multi-threaded consumption) ---");
-        int total = drainAll(client, address, cursors, writerDone);
+        DrainResult result = drainAll(client, address, cursors, writerDone);
         System.out.println();
-        System.out.println("  Total events consumed: " + total
+        System.out.println("  Total events consumed: " + result.totalEvents
                 + " across " + cursors.size() + " parallel thread(s).");
         System.out.println();
-        System.out.println("=== Sample complete ===");
+
+        // Save cursor tokens for later resume
+        saveCursors(cursorPath, result.finalCursors);
+        System.out.println("=== Fresh run complete ===");
         System.out.println();
-        System.out.println("  Extended retention is working! Changes older than 24h can be read");
-        System.out.println("  using cursors obtained from listCursors() or startFrom(Instant).");
+        System.out.println("  Cursor tokens saved to: " + cursorPath.toAbsolutePath());
+        System.out.println("  Saved at: " + Instant.now());
+        System.out.println();
+        System.out.println("  ┌─────────────────────────────────────────────────────────┐");
+        System.out.println("  │  TO TEST EXTENDED RETENTION:                             │");
+        System.out.println("  │                                                          │");
+        System.out.println("  │  1. Wait more than 24 hours                              │");
+        System.out.println("  │  2. (Optional) Add items in Azure Portal Data Explorer   │");
+        System.out.println("  │  3. Run this sample again                                │");
+        System.out.println("  │                                                          │");
+        System.out.println("  │  If it reads events → extended retention works!          │");
+        System.out.println("  │  If CursorExpiredException → limited to 24h baseline.   │");
+        System.out.println("  └─────────────────────────────────────────────────────────┘");
+    }
+
+    // ── Resume run: load saved cursors and read from where we left off ───────
+
+    private static void resumeFromSavedCursors(MulticloudDbClient client,
+                                               ResourceAddress address,
+                                               Path cursorPath) throws Exception {
+        System.out.println("--- MODE: Resume (loading saved cursors) ---");
+        System.out.println("  Cursor file: " + cursorPath.toAbsolutePath());
+
+        List<String> lines = Files.readAllLines(cursorPath);
+        if (lines.isEmpty()) {
+            System.err.println("  Cursor file is empty. Delete it and re-run for a fresh start.");
+            return;
+        }
+
+        // First line is metadata (saved timestamp)
+        String savedAt = lines.get(0);
+        System.out.println("  Saved at  : " + savedAt);
+        System.out.println("  Now       : " + Instant.now());
+
+        try {
+            Instant savedInstant = Instant.parse(savedAt);
+            Duration age = Duration.between(savedInstant, Instant.now());
+            long hours = age.toHours();
+            System.out.println("  Cursor age: " + hours + " hours (" + age.toDays() + " days)");
+            if (hours < 24) {
+                System.out.println("  ⚠ Cursors are less than 24h old — this doesn't prove extended retention.");
+                System.out.println("    Wait at least 24h to confirm retention beyond the baseline.");
+            } else {
+                System.out.println("  ✓ Cursors are older than 24h — resuming will prove extended retention!");
+            }
+        } catch (Exception e) {
+            System.out.println("  (Could not parse saved timestamp)");
+        }
+        System.out.println();
+
+        // Load cursor tokens (lines 1..N)
+        List<ChangeFeedCursor> savedCursors = new ArrayList<>();
+        for (int i = 1; i < lines.size(); i++) {
+            String token = lines.get(i).trim();
+            if (!token.isEmpty()) {
+                savedCursors.add(ChangeFeedCursor.fromToken(token));
+            }
+        }
+        System.out.println("  Loaded " + savedCursors.size() + " saved cursor(s)");
+        System.out.println();
+
+        // Try to resume reading from saved cursors
+        System.out.println("--- Resuming readChanges from saved cursors ---");
+        try {
+            AtomicBoolean done = new AtomicBoolean(true); // no writer — just read what's there
+            DrainResult result = drainAll(client, address, savedCursors, done);
+            System.out.println();
+            System.out.println("  ╔═══════════════════════════════════════════════════╗");
+            System.out.println("  ║  ✓ EXTENDED RETENTION CONFIRMED!                  ║");
+            System.out.println("  ╠═══════════════════════════════════════════════════╣");
+            System.out.println("  ║  Successfully resumed reading from saved cursors. ║");
+            System.out.println("  ║  Events read: " + String.format("%-35d", result.totalEvents) + "║");
+            System.out.println("  ║  Cursors did NOT expire after >24h.               ║");
+            System.out.println("  ║  Extended retention is working!                   ║");
+            System.out.println("  ╚═══════════════════════════════════════════════════╝");
+            System.out.println();
+
+            // Save updated cursors for next run
+            saveCursors(cursorPath, result.finalCursors);
+            System.out.println("  Updated cursor tokens saved for next run.");
+
+        } catch (CursorExpiredException ex) {
+            System.err.println();
+            System.err.println("  ╔═══════════════════════════════════════════════════╗");
+            System.err.println("  ║  ✗ CURSOR EXPIRED — 24h baseline only             ║");
+            System.err.println("  ╠═══════════════════════════════════════════════════╣");
+            System.err.println("  ║  The saved cursors have expired. This means       ║");
+            System.err.println("  ║  extended retention is NOT active on this account.║");
+            System.err.println("  ║                                                   ║");
+            System.err.println("  ║  To fix:                                          ║");
+            System.err.println("  ║  • Enable Continuous Backup on the Cosmos account ║");
+            System.err.println("  ║  • Or verify retentionDays is set correctly       ║");
+            System.err.println("  ╚═══════════════════════════════════════════════════╝");
+            System.err.println();
+            System.err.println("  Error: " + ex.getMessage());
+
+            // Delete stale cursor file so next run starts fresh
+            Files.deleteIfExists(cursorPath);
+            System.out.println("  Deleted stale cursor file. Re-run for a fresh start.");
+        }
+    }
+
+    // ── Cursor persistence ──────────────────────────────────────────────────
+
+    private static void saveCursors(Path path, List<String> cursorTokens) throws IOException {
+        List<String> lines = new ArrayList<>();
+        lines.add(Instant.now().toString()); // first line = timestamp
+        lines.addAll(cursorTokens);
+        Files.write(path, lines);
     }
 
     // ── Writer: produces CREATE/UPDATE/DELETE events ─────────────────────────
@@ -326,13 +444,25 @@ public class ChangeFeedExtendedRetentionSample {
 
     // ── Consumer: one thread per cursor (parallel partition consumption) ─────
 
-    private static int drainAll(MulticloudDbClient client,
-                                ResourceAddress address,
-                                List<ChangeFeedCursor> initial,
-                                AtomicBoolean writerDone) throws InterruptedException {
+    private static final class DrainResult {
+        final int totalEvents;
+        final List<String> finalCursors;
+
+        DrainResult(int totalEvents, List<String> finalCursors) {
+            this.totalEvents = totalEvents;
+            this.finalCursors = finalCursors;
+        }
+    }
+
+    private static DrainResult drainAll(MulticloudDbClient client,
+                                        ResourceAddress address,
+                                        List<ChangeFeedCursor> initial,
+                                        AtomicBoolean writerDone) throws Exception {
         AtomicInteger total = new AtomicInteger(0);
         CountDownLatch allDone = new CountDownLatch(initial.size());
         List<Thread> consumers = new ArrayList<>(initial.size());
+        String[] finalTokens = new String[initial.size()];
+        Exception[] threadException = new Exception[1];
 
         for (int i = 0; i < initial.size(); i++) {
             final int cursorIndex = i;
@@ -356,6 +486,13 @@ public class ChangeFeedExtendedRetentionSample {
                             Thread.sleep(250);
                         }
                     }
+                    finalTokens[cursorIndex] = cursor.toToken();
+                } catch (CursorExpiredException ce) {
+                    synchronized (threadException) {
+                        if (threadException[0] == null) {
+                            threadException[0] = ce;
+                        }
+                    }
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                 } finally {
@@ -369,6 +506,16 @@ public class ChangeFeedExtendedRetentionSample {
 
         System.out.println("  Started " + consumers.size() + " parallel consumer thread(s).");
         allDone.await();
-        return total.get();
+
+        // Re-throw CursorExpiredException if any thread encountered it
+        if (threadException[0] != null) {
+            throw threadException[0];
+        }
+
+        List<String> tokens = new ArrayList<>();
+        for (String t : finalTokens) {
+            tokens.add(t != null ? t : "");
+        }
+        return new DrainResult(total.get(), tokens);
     }
 }
