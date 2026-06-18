@@ -957,107 +957,66 @@ on Cosmos DB.
 | **Google Cloud Spanner** | ⏳ Not yet supported | Change-feed support for Spanner is not yet available. |
 | **AWS DynamoDB** | ⏳ Not yet supported | Change-feed support for DynamoDB is not yet available. |
 
-> **Scope of this sample.** The sample stops at the build-time gate on purpose.
-> Actually reading change events beyond the 24-hour baseline requires
-> provider-specific substrate setup that is out of scope for a portable demo
-> — see the [`Why not extendedRetention against live Cosmos?`](#provisioning-model--why-continuous-backup-matters)
-> note above for the Cosmos caveat and the
-> [SDK guide](https://learn.microsoft.com/) for Spanner change-stream DDL.
-> The plain `ChangeFeedSample` and `ChangeFeedWatcherSample` cover the
-> data-plane round-trip at the portable 24-hour baseline.
+> **This sample performs a full data-plane round-trip** — after the
+> capability gate passes, it provisions a container, writes test items,
+> and consumes change events using multi-threaded cursor readers.
+
+### Configuration
+
+Extended retention can be enabled in two ways:
+
+1. **Via properties file** (recommended):
+   ```properties
+   # In change-feed-cosmos-cloud.properties:
+   multiclouddb.changefeed.extendedRetentionDays=7
+   ```
+
+2. **Programmatically** (the sample falls back to this if the property is not set):
+   ```java
+   ChangeFeedConfig cf = ChangeFeedConfig.builder()
+       .extendedRetention(Duration.ofDays(7))
+       .build();
+   ```
 
 ### Running `ChangeFeedExtendedRetentionSample`
 
 After building the fat jar (`mvn clean package -DskipTests`):
 
-> **Live vs. emulator/local — they behave the same.** The build-time gate is
-> capability-based and runs before any wire I/O, so a Spanner emulator config
-> succeeds the same way as a live Spanner config, and a DynamoDB Local config
-> fails fast the same way as a live AWS config. The cloud variants below
-> need credentials and a real `.properties` file; the emulator/local variants
-> use the configs that ship with the repo and work out of the box.
+> Requires a **live Continuous-Backup Cosmos account** — the emulator does
+> not support Continuous Backup and the sample will exit with an error if
+> it detects a localhost endpoint.
 
 **macOS / Linux:**
 
 ```bash
-# --- Cosmos ----------------------------------------------------------------
-# Cosmos cloud — should succeed.
-# Requires a LIVE Continuous-Backup Cosmos account (the emulator does not
-# support CB; the sample detects localhost endpoints and bails out early).
-# Copy change-feed-cosmos-cloud.properties.template to *.properties and fill
-# in endpoint + key first.
+# Copy template and fill in endpoint + key
+cp src/main/resources/change-feed-cosmos-cloud.properties.template \
+   src/main/resources/change-feed-cosmos-cloud.properties
+# Edit to add your endpoint, key, and optionally:
+#   multiclouddb.changefeed.extendedRetentionDays=7
+
+mvn clean package -DskipTests
+
 java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# --- Spanner ---------------------------------------------------------------
-# Spanner emulator — should succeed (uses shipped change-feed-spanner.properties).
-# Start the emulator first:
-#   docker run --rm -p 9010:9010 -p 9020:9020 gcr.io/cloud-spanner-emulator/emulator
-java -Dmulticlouddb.config=change-feed-spanner.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# Spanner cloud — should succeed.
-# Copy change-feed-spanner-cloud.properties.template to *.properties and fill
-# in project + instance + database first.
-java -Dmulticlouddb.config=change-feed-spanner-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# --- DynamoDB --------------------------------------------------------------
-# DynamoDB Local — should fail fast (expected exit code: 1).
-# The build-time gate refuses before any wire I/O, so this works even if you
-# don't start DynamoDB Local. Uses shipped change-feed-dynamo.properties.
-java -Dmulticlouddb.config=change-feed-dynamo.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# DynamoDB cloud — should fail fast (expected exit code: 1).
-# Copy change-feed-dynamo-cloud.properties.template to *.properties and fill
-# in region first.
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
 ```
 
 **Windows (PowerShell):**
 
-> PowerShell mangles unquoted `-D...=...` system-property arguments and does
-> not recognise bash-style `\` line continuation. Quote each `-D` arg and use
-> the backtick (`` ` ``) for continuation, as shown below.
-
 ```powershell
-# --- Cosmos ----------------------------------------------------------------
-# Cosmos cloud — should succeed.
+# Copy template and fill in endpoint + key
+cp src\main\resources\change-feed-cosmos-cloud.properties.template `
+   src\main\resources\change-feed-cosmos-cloud.properties
+# Edit to add your endpoint, key, and optionally:
+#   multiclouddb.changefeed.extendedRetentionDays=7
+
+mvn clean package -DskipTests
+
 java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# --- Spanner ---------------------------------------------------------------
-# Spanner emulator — should succeed.
-java "-Dmulticlouddb.config=change-feed-spanner.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# Spanner cloud — should succeed.
-java "-Dmulticlouddb.config=change-feed-spanner-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# --- DynamoDB --------------------------------------------------------------
-# DynamoDB Local — should fail fast (expected exit code: 1).
-# No Docker / no DynamoDB Local container needed — the build-time gate
-# refuses extended retention before any wire I/O. Uses shipped
-# change-feed-dynamo.properties.
-java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-
-# DynamoDB cloud — should fail fast (expected exit code: 1).
-java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+```
 ```
 
 <a id="example-output-changefeedextendedretentionsample"></a>
