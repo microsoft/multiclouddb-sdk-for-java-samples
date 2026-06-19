@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * Azure Portal Data Explorer or the Cosmos emulator UI).
  * <p>
  * <b>Note:</b> This sample currently supports <b>Azure Cosmos DB only</b>.
- * DynamoDB and Spanner change-feed support is not yet available in this repo.
+ * Other providers will error until they ship change-feed support.
  * <p>
  * Unlike {@link ChangeFeedSample}, this watcher does not produce any writes
  * of its own — it only consumes.
@@ -101,7 +101,7 @@ public class ChangeFeedWatcherSample {
         // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
         if (!ProviderId.COSMOS.equals(provider)) {
             log.error("Change-feed samples currently support Cosmos DB only.");
-            log.error("DynamoDB and Spanner change-feed support is not yet available.");
+            log.error("Set multiclouddb.provider=cosmos in your config. Other providers will be supported in a future release.");
             System.exit(1);
             return;
         }

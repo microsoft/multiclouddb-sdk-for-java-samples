@@ -106,9 +106,13 @@ mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.todo.TodoApp \
 
 ### Change Feed Samples
 
-Three samples demonstrate the SDK's pull-mode change feed. The samples
-currently target **Azure Cosmos DB only** (DynamoDB and Spanner change-feed
-support is not yet available). They use the dedicated database
+> ⚠️ **Cosmos DB only (temporary):** The change-feed samples require SDK
+> `0.1.0-beta.2` which includes the Cosmos DB change-feed provider. DynamoDB
+> and Spanner providers do not yet implement change feed — running these samples
+> against those providers will exit with an error. This restriction will be
+> lifted once the remaining providers ship change-feed support.
+
+Three samples demonstrate the SDK's pull-mode change feed. They use the dedicated database
 `multiclouddb-sdk-for-java-changefeed` and container `change-feed-demo` (see
 `src/main/resources/change-feed-cosmos*.properties`).
 

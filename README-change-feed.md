@@ -3,6 +3,12 @@
 Command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
 change feed** on Azure Cosmos DB.
 
+> ⚠️ **Cosmos DB only (temporary):** These samples require SDK `0.1.0-beta.2`
+> and the Cosmos DB change-feed provider. DynamoDB and Spanner do not yet
+> implement change feed — pointing these samples at a non-Cosmos config will
+> exit immediately with an error. This note will be removed once the remaining
+> providers ship change-feed support.
+
 ## Samples
 
 | Sample | Description |
@@ -970,6 +976,6 @@ for the full walk-through.
 ### `Could not find artifact com.microsoft.multiclouddb:multiclouddb-api:jar:<version>`
 
 You likely have a stale `.mvn/maven.config` left over from local SDK testing.
-Either delete `.mvn/maven.config` (defaults will resolve `0.1.0-beta.1` from
+Either delete `.mvn/maven.config` (defaults will resolve `0.1.0-beta.2` from
 Maven Central) or update the override to a version actually installed in your
 `~/.m2`. See [`../README.md#sdk-version`](README.md#sdk-version).
