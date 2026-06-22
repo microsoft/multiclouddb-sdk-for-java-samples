@@ -6,6 +6,8 @@ Each sample runs against **Azure Cosmos DB**, **Amazon DynamoDB**, or **Google C
 | Sample | Description | Port | Guide |
 |--------|-------------|------|-------|
 | **Portable CRUD + Query** | Minimal end-to-end CRUD and query sample | — | [below](#portable-crud--query-sample) |
+| **Change Feed (one-shot)** | Writer + consumer demo showing CREATE / UPDATE / DELETE events | — | [below](#change-feed-samples) |
+| **Change Feed Watcher** | Long-running consumer that prints events as you add/edit/delete items in the portal | — | [below](#change-feed-samples) |
 | **Risk Analysis Platform** | Multi-tenant portfolio risk analytics with executive dashboard | `8090` | [README-risk-platform.md](README-risk-platform.md) |
 | **TODO App** | Simple CRUD web app with browser UI | `8080` | [README-todo-app.md](README-todo-app.md) |
 
@@ -19,35 +21,16 @@ Each sample runs against **Azure Cosmos DB**, **Amazon DynamoDB**, or **Google C
 java -version   # must be 17 or later
 ```
 
-### 2 — Build the Multicloud DB SDK locally
+### 2 — Build this project
 
-The SDK artifacts (`multiclouddb-api`, `multiclouddb-provider-*`) are not yet published to Maven Central. You need to install them into your local `~/.m2` repository first.
-
-```bash
-# Clone the main SDK repo
-git clone https://github.com/microsoft/multiclouddb-sdk-for-java.git
-cd multiclouddb-sdk-for-java
-
-# Install all modules into ~/.m2 (skipping tests for speed)
-mvn clean install -DskipTests
-```
-
-Once that succeeds, the artifacts are available at:
-
-```
-~/.m2/repository/com/microsoft/multiclouddb/
-  multiclouddb-api/0.1.0-beta.2/
-  multiclouddb-provider-cosmos/0.1.0-beta.2/
-  multiclouddb-provider-dynamo/0.1.0-beta.2/
-  multiclouddb-provider-spanner/0.1.0-beta.2/
-```
-
-### 3 — Build this project
+SDK dependencies are pulled from Maven Central by default — no extra setup needed.
 
 ```bash
 # In this repo root
 mvn compile
 ```
+
+> **Developing the SDK itself?** See [SDK Version](#sdk-version) below for how to point the build at a locally-built SDK via a git-ignored override file.
 
 ---
 
@@ -121,6 +104,183 @@ mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.todo.TodoApp \
     -Dmulticlouddb.config=todo-app-dynamo.properties
 ```
 
+### Change Feed Samples
+
+> ⚠️ **Cosmos DB only (temporary):** The change-feed samples require SDK
+> `0.1.0-beta.2` which includes the Cosmos DB change-feed provider. DynamoDB
+> and Spanner providers do not yet implement change feed — running these samples
+> against those providers will exit with an error. This restriction will be
+> lifted once the remaining providers ship change-feed support.
+
+Three samples demonstrate the SDK's pull-mode change feed. They use the dedicated database
+`multiclouddb-sdk-for-java-changefeed` and container `change-feed-demo` (see
+`src/main/resources/change-feed-cosmos*.properties`).
+
+> The change-feed sample sources live under
+> `src/main/java/com/multiclouddb/samples/changefeed/` and are in the
+> `com.multiclouddb.samples.changefeed` package — see
+> [`README-change-feed.md`](README-change-feed.md) for the deep dive.
+
+**Provisioning notes:**
+
+- **Live Cosmos** — the account must have **Continuous Backup** enabled. When CB
+  is on, the All-Versions-and-Deletes (AVAD) change feed (the source of
+  CREATE/UPDATE/DELETE events) is available automatically on every container, so
+  the samples just call `ensureContainer` for a plain container. Verify CB with
+  `az cosmosdb show --query backupPolicy.type -o tsv` (expect `Continuous`).
+- **Cosmos emulator** — the emulator has no CB, so the samples pre-provision the
+  container with an AVAD `ChangeFeedPolicy` and a 10-minute retention (the
+  emulator's hard ceiling) on first run.
+
+**First-time setup for live Cosmos (one-time per checkout):**
+
+The `change-feed-cosmos-cloud.properties` file is gitignored; only the
+`.template` ships with the repo. `ConfigLoader` reads configs from the
+fat-jar classpath, so the runtime file must live under
+`src/main/resources/` *before* you run `mvn package`:
+
+```bash
+cp src/main/resources/change-feed-cosmos-cloud.properties.template \
+   src/main/resources/change-feed-cosmos-cloud.properties
+# edit src/main/resources/change-feed-cosmos-cloud.properties to fill in endpoint + key
+mvn package -DskipTests
+```
+
+After this one-time copy you can re-use the resulting fat jar for both
+change-feed samples below.
+
+#### 1. One-shot change feed demo (`ChangeFeedSample`)
+
+Runs a writer thread that produces a fixed CREATE / UPDATE / DELETE sequence,
+drains the change feed, then exits. Useful for validating that change feed is
+wired up end-to-end.
+
+**macOS / Linux:**
+
+```bash
+# Live Cosmos
+mvn package -DskipTests
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Cosmos emulator (default)
+java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+**Windows (PowerShell):**
+
+> PowerShell mangles unquoted `-D...=...` arguments and does not recognise
+> bash-style `\` line continuation. Quote each `-D` arg and use the backtick
+> (`` ` ``) for continuation, as shown below.
+
+```powershell
+# Live Cosmos
+mvn package -DskipTests
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Cosmos emulator (default)
+java -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+#### 2. Continuous watcher (`ChangeFeedWatcherSample`)
+
+Long-running consumer with no built-in writes. Start it, then add, edit, or
+delete items in the Azure Portal **Data Explorer** for the
+`multiclouddb-sdk-for-java-changefeed/change-feed-demo` container — each
+operation prints a `CREATE` / `UPDATE` / `DELETE` line on the console within
+the poll interval (default 1 second). Press **Ctrl+C** to stop; the watcher
+prints a final event tally.
+
+**macOS / Linux:**
+
+```bash
+# Live Cosmos
+mvn package -DskipTests
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Cosmos emulator (default config)
+java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Override the poll interval (milliseconds; default 1000)
+java -Dchangefeed.poll.intervalMs=500 \
+     -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Live Cosmos
+mvn package -DskipTests
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Cosmos emulator (default config)
+java -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Override the poll interval (milliseconds; default 1000)
+java "-Dchangefeed.poll.intervalMs=500" `
+     "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+#### 3. Extended retention escape hatch (`ChangeFeedExtendedRetentionSample`)
+
+Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts
+to build a client. Succeeds on Cosmos (which declares
+`Capability.EXTENDED_CHANGE_FEED_HISTORY`). Use this to verify extended
+retention configuration and test cursor persistence beyond 24 hours. See
+[`README-change-feed.md`](README-change-feed.md#extended-retention-escape-hatch)
+for details.
+
+**macOS / Linux:**
+
+```bash
+# Cosmos (live Continuous-Backup account; emulator is rejected)
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Cosmos (live Continuous-Backup account; emulator is rejected)
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+```
+
+Example output (after creating, then deleting an item in the portal):
+
+```
+=== Multicloud DB Change Feed Watcher ===
+Provider     : Azure Cosmos DB
+Mode         : LIVE
+Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
+Poll interval: 1000 ms
+
+Discovered 1 partition cursor(s) at the live tip.
+
+Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo — go add/update/delete items (e.g., in the Azure Portal Data Explorer).
+Press Ctrl+C to stop.
+
+[2026-06-12T19:40:55Z] CREATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"title":"hello","id":"portal-1", ...}
+[2026-06-12T19:40:58Z] DELETE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {}
+```
+
 
 ---
 
@@ -135,6 +295,12 @@ mvn exec:java -Dexec.mainClass=com.multiclouddb.samples.todo.TodoApp \
 | `risk-platform-dynamo.properties` | DynamoDB Local |
 | `risk-platform-cosmos-cloud.properties.template` | Cosmos DB (cloud) |
 | `risk-platform-dynamo-cloud.properties.template` | DynamoDB (cloud) |
+| `change-feed-cosmos.properties` | Cosmos DB emulator (data-plane samples + extended-retention build-time gate) |
+| `change-feed-cosmos-cloud.properties.template` | Cosmos DB (cloud) — copy to `src/main/resources/change-feed-cosmos-cloud.properties` (gitignored), then fill in endpoint + key |
+| `change-feed-spanner.properties` | ⏳ Reserved for future Spanner change-feed support |
+| `change-feed-spanner-cloud.properties.template` | ⏳ Reserved for future Spanner change-feed support |
+| `change-feed-dynamo.properties` | ⏳ Reserved for future DynamoDB change-feed support |
+| `change-feed-dynamo-cloud.properties.template` | ⏳ Reserved for future DynamoDB change-feed support |
 
 ---
 
@@ -175,8 +341,32 @@ multiclouddb-samples/
 
 ## SDK Version
 
-This project depends on **Multicloud DB SDK `0.1.0-beta.2`**.  
-To upgrade, change the `multiclouddb-*.version` properties in `pom.xml` and re-run `mvn clean install -DskipTests` in the main SDK repo.
+This project depends on **Multicloud DB SDK `0.1.0-beta.2`** ([Maven Central](https://search.maven.org/artifact/com.microsoft.multiclouddb/multiclouddb-api)).
+
+### Upgrading
+
+To pick up a newer released version, bump the `multiclouddb-*.version` properties in `pom.xml`.
+
+### Testing against a locally-built SDK
+
+When developing the SDK itself, you can point this project at a locally-installed build without modifying `pom.xml`:
+
+```bash
+# 1. Build & install the SDK locally
+cd <multiclouddb-sdk-for-java>
+mvn clean install -DskipTests
+
+# 2. Activate the override in this repo
+cp .mvn/maven.config.example .mvn/maven.config
+
+# 3. Edit .mvn/maven.config to match the version you just installed
+#    (defaults to 0.2.0-SNAPSHOT in the template)
+
+# 4. Build as usual — Maven picks up .mvn/maven.config automatically
+mvn compile
+```
+
+`.mvn/maven.config` is git-ignored, so per-developer overrides never leak into commits.
 
 ---
 

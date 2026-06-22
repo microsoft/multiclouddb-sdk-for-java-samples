@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+#  Change Feed Sample — Azure Cosmos DB (LIVE account, master-key auth)
+# ---------------------------------------------------------------------------
+#
+#  Template — copy to `change-feed-cosmos-cloud.properties` (gitignored) and
+#  fill in your endpoint + primary master key:
+#
+#    cp src/main/resources/change-feed-cosmos-cloud.properties.template \
+#       src/main/resources/change-feed-cosmos-cloud.properties
+#
+#  Then run with:
+#    java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+#         -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+#         com.multiclouddb.samples.changefeed.ChangeFeedSample
+#
+#  REQUIRED: Cosmos account must have Continuous Backup enabled (any tier).
+#  When CB is on, the All-Versions-and-Deletes (AVAD) change feed is available
+#  automatically on every container — the sample creates a plain container and
+#  reads in AVAD mode. Verify with:
+#    az cosmosdb show --name <account> -g <rg> --query backupPolicy.type -o tsv
+#  Expect: Continuous
+#
+#  Get connection info:
+#    az cosmosdb show     --name <account> -g <rg> --query documentEndpoint -o tsv
+#    az cosmosdb keys list --name <account> -g <rg> --query primaryMasterKey -o tsv
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=cosmos
+
+# --- Application Settings ---------------------------------------------------
+# Pick names that don't collide with any pre-existing non-AVAD containers —
+# Cosmos cannot retrofit AVAD onto an existing container.
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+
+# --- Azure Cosmos DB (LIVE) -------------------------------------------------
+multiclouddb.connection.endpoint=<REPLACE_ME_ENDPOINT>
+multiclouddb.connection.key=<REPLACE_ME_PRIMARY_KEY>
+multiclouddb.connection.connectionMode=gateway
+
+# --- Throughput (optional, emulator only) ------------------------------------
+# On the emulator the sample creates the container via the Cosmos SDK. Set
+# this to ≥ 30000 to get 3+ physical partitions → 3+ change-feed cursors.
+# On a live account the container is created via ensureContainer() (portable
+# API) and throughput is controlled in the Azure Portal or via CLI:
+#   az cosmosdb sql container throughput update --throughput 30000 ...
+# multiclouddb.throughput=30000
+
+# --- Extended Retention (ChangeFeedExtendedRetentionSample only) -------------
+#
+# HOW EXTENDED RETENTION WORKS:
+#
+#   Extended retention = reading changes older than 24 hours.
+#   If omitted → ChangeFeedConfig.defaults() (24h baseline) — works on ALL providers.
+#   If set → SDK opts into extended retention via:
+#     ChangeFeedConfig.builder().extendedRetention(Duration.ofDays(N)).build()
+#
+#   The SDK fails fast if you set this on a provider that doesn't support it
+#   (e.g. DynamoDB). Leave it out for unsupported providers.
+#
+#   Cosmos DB account types:
+#
+#   Continuous Backup (CB) account:
+#     Account setup: Enable Continuous Backup (7d or 30d tier) in Azure Portal
+#                    → Cosmos account → Backup & Restore → Continuous
+#     Behavior:      AVAD is automatic. Retention = backup tier (7d or 30d).
+#     NOTE:          On CB accounts, Cosmos REJECTS explicit retention policies.
+#                    Use ChangeFeedSample/ChangeFeedWatcherSample instead —
+#                    they already benefit from extended retention automatically.
+#
+#   Periodic Backup (non-CB) account:
+#     Account setup: No account-level change needed.
+#     Behavior:      The SDK creates the container with an explicit AVAD
+#                    ChangeFeedPolicy. Retention = the value you specify below.
+#
+# Set the number of days for extended retention
+# (only needed for ChangeFeedExtendedRetentionSample on Periodic Backup accounts):
+# multiclouddb.changefeed.retentionDays=7

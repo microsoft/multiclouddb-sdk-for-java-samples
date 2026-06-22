@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+#  Change Feed Sample — Google Cloud Spanner (Cloud)
+# ---------------------------------------------------------------------------
+#
+#  NOTE: Spanner change-feed support is not yet available in this repo.
+#  This template is retained for future use. The change-feed samples
+#  currently exit early unless the provider is set to 'cosmos'.
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=spanner
+
+# --- Application Settings ---------------------------------------------------
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+
+# --- Google Cloud Spanner (Cloud) -------------------------------------------
+# Your Google Cloud project ID
+# Run: gcloud config get-value project
+multiclouddb.connection.projectId=<YOUR-GCP-PROJECT-ID>
+
+# Your Spanner instance ID
+# Run: gcloud spanner instances list --project=<YOUR-GCP-PROJECT-ID>
+multiclouddb.connection.instanceId=<YOUR-SPANNER-INSTANCE-ID>
+
+# The Spanner database ID
+multiclouddb.connection.databaseId=multiclouddb-sdk-for-java-changefeed
+
+# -- No emulatorHost = connects to real Google Cloud Spanner ----------------
+# For the local emulator, set: multiclouddb.connection.emulatorHost=localhost:9010
+# multiclouddb.connection.emulatorHost=

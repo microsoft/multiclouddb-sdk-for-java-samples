@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+#  Change Feed Sample — Amazon DynamoDB (AWS Cloud)
+# ---------------------------------------------------------------------------
+#
+#  NOTE: DynamoDB change-feed support is not yet available in this repo.
+#  This template is retained for future use. The change-feed samples
+#  currently exit early unless the provider is set to 'cosmos'.
+# ---------------------------------------------------------------------------
+
+multiclouddb.provider=dynamo
+
+# --- Application Settings ---------------------------------------------------
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+
+# --- Amazon DynamoDB (AWS Cloud) --------------------------------------------
+# AWS region where your DynamoDB table lives
+# Run: aws configure get region
+multiclouddb.connection.region=<YOUR-AWS-REGION>
+
+# -- No endpoint configured -------------------------------------------------
+# Leave absent to connect to the real AWS DynamoDB service.
+# For DynamoDB Local, set: multiclouddb.connection.endpoint=http://localhost:8000
+# multiclouddb.connection.endpoint=
+
+# -- No credentials needed in this file ------------------------------------
+# The SDK uses the default AWS credential provider chain automatically:
+#   1. Environment variables (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN)
+#   2. Java system properties (aws.accessKeyId / aws.secretAccessKey)
+#   3. AWS shared credentials file (~/.aws/credentials via aws configure)
+#   4. AWS IAM role for EC2 / ECS task role / Lambda execution role
+#   5. AWS SSO (aws sso login)
+# Run 'aws configure' to set up credentials for local development.

@@ -15,11 +15,9 @@
         Runs against Azure Cosmos DB, Amazon DynamoDB, or Google Cloud Spanner by changing
         a single properties file.
 
-        Prerequisites:
-          1. Clone https://github.com/microsoft/multiclouddb-sdk-for-java
-          2. Run: mvn clean install -DskipTests
-             This installs the SDK artifacts into your local ~/.m2 repository.
-          3. Then build this project: mvn compile
+        SDK dependencies are resolved from Maven Central by default. To test against a
+        locally-built SDK instead, copy .mvn/maven.config.example to .mvn/maven.config
+        and set the version overrides there (the file is git-ignored).
     </description>
     <url>https://github.com/allenkim0129/multiclouddb-samples</url>
 
@@ -39,12 +37,17 @@
 
         <!--
             Multicloud DB SDK versions.
-            These artifacts are resolved from your local ~/.m2 repository.
-            Build the SDK first: mvn clean install -DskipTests
-            (in the multiclouddb-sdk-for-java repo root)
+
+            Defaults track the latest version published to Maven Central
+            (https://search.maven.org/artifact/com.microsoft.multiclouddb/multiclouddb-api).
+            No local SDK build is required for the defaults.
+
+            To test against a locally-built SDK (e.g., while developing the SDK
+            itself), copy .mvn/maven.config.example to .mvn/maven.config and set
+            the per-property overrides there. That file is git-ignored.
         -->
-        <multiclouddb-api.version>0.1.0-beta.1</multiclouddb-api.version>
-        <multiclouddb-provider-cosmos.version>0.1.0-beta.1</multiclouddb-provider-cosmos.version>
+        <multiclouddb-api.version>0.1.0-beta.2</multiclouddb-api.version>
+        <multiclouddb-provider-cosmos.version>0.1.0-beta.2</multiclouddb-provider-cosmos.version>
         <multiclouddb-provider-dynamo.version>0.1.0-beta.1</multiclouddb-provider-dynamo.version>
         <multiclouddb-provider-spanner.version>0.1.0-beta.1</multiclouddb-provider-spanner.version>
 
@@ -59,9 +62,9 @@
     <dependencies>
 
         <!-- ============================================================
-             Multicloud DB SDK — resolved from local ~/.m2 repository.
-             Run `mvn clean install -DskipTests` in multiclouddb-sdk-for-java
-             to populate these before building this project.
+             Multicloud DB SDK — resolved from Maven Central by default.
+             Override versions for local SDK builds via .mvn/maven.config
+             (see .mvn/maven.config.example).
              ============================================================ -->
         <dependency>
             <groupId>com.microsoft.multiclouddb</groupId>
@@ -86,6 +89,28 @@
             <artifactId>multiclouddb-provider-spanner</artifactId>
             <version>${multiclouddb-provider-spanner.version}</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- ============================================================
+             Provider SDKs needed at COMPILE time by samples that call
+             provider-native APIs directly (e.g., ChangeFeedSample
+             pre-provisions a Cosmos AVAD container against the emulator,
+             and enables DynamoDB Streams on DynamoDB Local tables).
+             The Multicloud DB SDK itself only needs these at runtime
+             (see provider-* deps above) — declaring them here as compile
+             scope lets samples that opt into provider-specific setup do
+             so without changing the runtime classpath.
+             ============================================================ -->
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-cosmos</artifactId>
+            <version>${azure-cosmos.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>dynamodb</artifactId>
+            <version>${aws-sdk.version}</version>
         </dependency>
 
         <!-- ============================================================
@@ -150,30 +175,41 @@
             </plugin>
 
             <!--
-                Assembles an executable JAR with all dependencies bundled.
+                Builds a shaded (fat) JAR with all dependencies bundled and
+                META-INF/services files properly merged (so all three provider
+                adapters are discoverable at runtime).
                 Run any sample with:
                   java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
                        com.multiclouddb.samples.PortableCrudQuerySample
             -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-assembly-plugin</artifactId>
-                <version>3.6.0</version>
-                <configuration>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
-                    <archive>
-                        <manifest>
-                            <mainClass>com.multiclouddb.samples.PortableCrudQuerySample</mainClass>
-                        </manifest>
-                    </archive>
-                </configuration>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
                 <executions>
                     <execution>
-                        <id>assemble-jar</id>
                         <phase>package</phase>
-                        <goals><goal>single</goal></goals>
+                        <goals><goal>shade</goal></goals>
+                        <configuration>
+                            <shadedArtifactAttached>true</shadedArtifactAttached>
+                            <shadedClassifierName>jar-with-dependencies</shadedClassifierName>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>com.multiclouddb.samples.PortableCrudQuerySample</mainClass>
+                                </transformer>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                            </transformers>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

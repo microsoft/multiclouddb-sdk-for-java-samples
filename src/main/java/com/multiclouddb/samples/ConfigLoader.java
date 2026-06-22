@@ -5,9 +5,11 @@ package com.multiclouddb.samples;
 
 import com.multiclouddb.api.MulticloudDbClientConfig;
 import com.multiclouddb.api.ProviderId;
+import com.multiclouddb.api.changefeed.ChangeFeedConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.Properties;
 
 /**
@@ -29,6 +31,7 @@ import java.util.Properties;
  *   multiclouddb.connection.key=...
  *   multiclouddb.auth.accessKeyId=...     # auth settings (when needed)
  *   multiclouddb.feature.someFlag=true    # optional feature flags
+ *   multiclouddb.changefeed.retentionDays=7  # opt into extended retention (days)
  * </pre>
  * <p>
  * To switch providers, simply point to a different config file at startup.
@@ -57,6 +60,26 @@ public final class ConfigLoader {
         /** Read an application property (null if missing). */
         public String property(String key) {
             return properties.getProperty(key);
+        }
+
+        /**
+         * Returns the SDK config without the changeFeed extended retention opt-in.
+         * Use this in samples that don't need explicit extended retention
+         * (e.g. ChangeFeedSample, ChangeFeedWatcherSample) — on CB accounts,
+         * extended retention is automatic and setting it explicitly causes errors.
+         */
+        public MulticloudDbClientConfig sdkWithoutExtendedRetention() {
+            if (sdk.changeFeed() == null) {
+                return sdk;
+            }
+            return MulticloudDbClientConfig.builder()
+                    .provider(sdk.provider())
+                    .connection(sdk.connection())
+                    .auth(sdk.auth())
+                    .defaultOptions(sdk.defaultOptions())
+                    .nativeDiagnosticsEnabled(sdk.nativeDiagnosticsEnabled())
+                    .userAgentSuffix(sdk.userAgentSuffix())
+                    .build();
         }
     }
 
@@ -110,6 +133,29 @@ public final class ConfigLoader {
                 builder.auth(
                         key.substring("multiclouddb.auth.".length()),
                         props.getProperty(key));
+            }
+        }
+
+        // Change-feed configuration (optional)
+        // If retentionDays is set, opt into extended retention (> 24h baseline).
+        // If omitted, ChangeFeedConfig.defaults() (24h) is used — works on ALL providers.
+        // Leave the property out for providers that don't support extended retention.
+        // The SDK fails fast if you set it on an unsupported provider.
+        String retentionDays = props.getProperty("multiclouddb.changefeed.retentionDays");
+        if (retentionDays != null && !retentionDays.isBlank()) {
+            try {
+                long days = Long.parseLong(retentionDays.trim());
+                if (days <= 0 || days > 365) {
+                    System.err.println("  WARNING: multiclouddb.changefeed.retentionDays="
+                            + retentionDays + " is out of range (1-365); ignoring.");
+                } else {
+                    builder.changeFeed(ChangeFeedConfig.builder()
+                            .extendedRetention(Duration.ofDays(days))
+                            .build());
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("  WARNING: multiclouddb.changefeed.retentionDays="
+                        + retentionDays + " is not a valid number; ignoring.");
             }
         }
 
