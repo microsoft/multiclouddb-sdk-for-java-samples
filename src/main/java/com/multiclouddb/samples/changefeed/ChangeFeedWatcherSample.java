@@ -29,8 +29,9 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * Continuous change-feed watcher — keeps running until Ctrl+C and prints
  * every CREATE / UPDATE / DELETE event as it arrives. Use this to observe
- * the change feed while you add or delete items manually (e.g., from the
- * Azure Portal Data Explorer or the Cosmos emulator UI).
+ * the change feed while you add or delete items manually using your provider's
+ * tooling (e.g., the Azure Portal Data Explorer / Cosmos emulator UI, or the
+ * AWS console / CLI for DynamoDB).
  * <p>
  * <b>Note:</b> Supported on <b>Azure Cosmos DB</b> and <b>Amazon DynamoDB</b>.
  * Spanner will error until it ships change-feed support.
@@ -60,8 +61,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * <h3>Try it</h3>
  * <ol>
  *   <li>Start the watcher. It prints "Watching … (press Ctrl+C to stop)".</li>
- *   <li>In the Azure Portal Data Explorer (or the Cosmos emulator UI),
- *       create, edit, or delete items in the target container.</li>
+ *   <li>Using your provider's tooling — the Azure Portal Data Explorer /
+ *       Cosmos emulator UI, or the AWS console / CLI for DynamoDB — create,
+ *       edit, or delete items in the target container.</li>
  *   <li>Watch the console — each operation surfaces as a
  *       {@code CREATE} / {@code UPDATE} / {@code DELETE} line within the
  *       poll interval, tagged with the cursor index.</li>
@@ -161,7 +163,8 @@ public class ChangeFeedWatcherSample {
                         + "change-feed-mode mismatch. Aborting watcher.");
                 return;
             }
-            log.info("Watching {}/{} — go add/update/delete items (e.g., in the Azure Portal Data Explorer).",
+            log.info("Watching {}/{} — go add/update/delete items (e.g., in the Azure Portal "
+                    + "Data Explorer for Cosmos, or via the AWS console/CLI for DynamoDB).",
                     database, collection);
             log.info("Press Ctrl+C to stop.");
 

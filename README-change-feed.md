@@ -1212,7 +1212,7 @@ this, you likely pre-created the table without a stream, or pointed the sample
 at a table that wasn't provisioned by it. Enable a stream on the table:
 
 ```bash
-aws dynamodb update-table --table-name local__change-feed-demo --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
+aws dynamodb update-table --table-name local__change-feed-demo --endpoint-url http://localhost:8000 --region us-east-1 --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
 ```
 
 …or let the sample create the table for you. Note that only changes committed

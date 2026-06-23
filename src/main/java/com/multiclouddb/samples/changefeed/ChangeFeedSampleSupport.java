@@ -127,9 +127,11 @@ final class ChangeFeedSampleSupport {
      * <b>not</b> enable streams, so {@code listCursors}/{@code readChanges}
      * would otherwise fail with {@code UNSUPPORTED_CAPABILITY(stream_not_enabled)}.
      * This helper turns on a {@link StreamViewType#NEW_AND_OLD_IMAGES} stream
-     * (required so DELETE events carry the old image) and waits until the
-     * table is ACTIVE with a stream ARN. It is idempotent: if the stream is
-     * already enabled with the right view type, it is a no-op.
+     * (required so DELETE events carry the old image) and waits up to 60
+     * seconds for the table to become ACTIVE with a stream ARN (logging a
+     * warning if it does not within that window). It is idempotent: if the
+     * stream is already enabled with the right view type, it skips the update
+     * and only waits for the stream ARN to appear.
      * <p>
      * Call this <b>after</b> {@code ensureContainer} (the table must exist).
      * Only events committed <b>after</b> the stream is enabled are surfaced.
@@ -141,19 +143,27 @@ final class ChangeFeedSampleSupport {
         try (DynamoDbClient ddb = buildDynamoClient(appConfig)) {
             TableDescription table = ddb.describeTable(b -> b.tableName(tableName)).table();
             StreamSpecification spec = table.streamSpecification();
-            boolean alreadyEnabled = spec != null
+            boolean streamConfigured = spec != null
                     && Boolean.TRUE.equals(spec.streamEnabled())
-                    && spec.streamViewType() == StreamViewType.NEW_AND_OLD_IMAGES
-                    && table.latestStreamArn() != null;
-            if (alreadyEnabled) {
+                    && spec.streamViewType() == StreamViewType.NEW_AND_OLD_IMAGES;
+
+            if (streamConfigured && table.latestStreamArn() != null) {
                 log.info("  [provision] DynamoDB Stream already enabled on '{}' (NEW_AND_OLD_IMAGES).",
                         tableName);
                 return;
             }
 
-            ddb.updateTable(b -> b.tableName(tableName)
-                    .streamSpecification(s -> s.streamEnabled(true)
-                            .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)));
+            if (streamConfigured) {
+                // The stream is already requested with the right view type but the ARN
+                // hasn't populated yet (enablement still in progress). Skip updateTable
+                // to avoid ResourceInUseException and just wait for it to become active.
+                log.info("  [provision] DynamoDB Stream on '{}' is still enabling (NEW_AND_OLD_IMAGES); "
+                        + "waiting for it to become active.", tableName);
+            } else {
+                ddb.updateTable(b -> b.tableName(tableName)
+                        .streamSpecification(s -> s.streamEnabled(true)
+                                .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)));
+            }
 
             if (waitForTableStreamActive(ddb, tableName)) {
                 log.info("  [provision] Enabled DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES). "
