@@ -2,9 +2,13 @@
 #  Change Feed Sample — Amazon DynamoDB (AWS Cloud)
 # ---------------------------------------------------------------------------
 #
-#  NOTE: DynamoDB change-feed support is not yet available in this repo.
-#  This template is retained for future use. The change-feed samples
-#  currently exit early unless the provider is set to 'cosmos'.
+#  Change feed on DynamoDB is backed by DynamoDB Streams. The sample enables a
+#  NEW_AND_OLD_IMAGES stream on the table automatically after creating it
+#  (ensureContainer creates the table but does not turn on streams). Only
+#  changes committed after the stream is enabled are surfaced.
+#
+#  Extended retention is NOT supported on DynamoDB (Streams are fixed at 24h),
+#  so ChangeFeedExtendedRetentionSample remains Cosmos-only.
 # ---------------------------------------------------------------------------
 
 multiclouddb.provider=dynamo

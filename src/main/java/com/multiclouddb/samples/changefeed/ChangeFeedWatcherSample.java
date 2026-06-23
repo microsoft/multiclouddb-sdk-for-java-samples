@@ -32,8 +32,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * the change feed while you add or delete items manually (e.g., from the
  * Azure Portal Data Explorer or the Cosmos emulator UI).
  * <p>
- * <b>Note:</b> This sample currently supports <b>Azure Cosmos DB only</b>.
- * Other providers will error until they ship change-feed support.
+ * <b>Note:</b> Supported on <b>Azure Cosmos DB</b> and <b>Amazon DynamoDB</b>.
+ * Spanner will error until it ships change-feed support.
  * <p>
  * Unlike {@link ChangeFeedSample}, this watcher does not produce any writes
  * of its own — it only consumes.
@@ -76,6 +76,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li><b>Cosmos emulator</b> — the watcher pre-provisions the AVAD
  *       container with a 10-minute retention (the emulator's hard ceiling)
  *       on first run.</li>
+ *   <li><b>DynamoDB (local or AWS)</b> — the watcher enables a
+ *       {@code NEW_AND_OLD_IMAGES} DynamoDB Stream on the table after
+ *       {@code ensureContainer} (the SDK does not enable streams by
+ *       default).</li>
  * </ul>
  */
 public class ChangeFeedWatcherSample {
@@ -98,17 +102,13 @@ public class ChangeFeedWatcherSample {
         log.info("=== Multicloud DB Change Feed Watcher ===");
         log.info("Provider     : {}", provider.displayName());
 
-        // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
-        if (!ProviderId.COSMOS.equals(provider)) {
-            log.error("Change-feed samples currently support Cosmos DB only.");
-            log.error("Set multiclouddb.provider=cosmos in your config. Other providers will be supported in a future release.");
-            System.exit(1);
-            return;
+        boolean isDynamo = ProviderId.DYNAMO.equals(provider);
+        boolean isCosmosEmulator = ProviderId.COSMOS.equals(provider)
+                && ChangeFeedSampleSupport.isLocalEndpoint(
+                        appConfig.sdk().connection().get("endpoint"));
+        if (ProviderId.COSMOS.equals(provider)) {
+            log.info("Mode         : {}", isCosmosEmulator ? "EMULATOR" : "LIVE");
         }
-
-        boolean isCosmosEmulator = ChangeFeedSampleSupport.isLocalEndpoint(
-                appConfig.sdk().connection().get("endpoint"));
-        log.info("Mode         : {}", isCosmosEmulator ? "EMULATOR" : "LIVE");
 
         String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
         String collection = appConfig.property("multiclouddb.collection", DEFAULT_COLLECTION);
@@ -132,12 +132,20 @@ public class ChangeFeedWatcherSample {
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 log.error("Change feed is not supported on {}.", provider.displayName());
+                log.error("Supported providers: Cosmos DB, DynamoDB. Set multiclouddb.provider accordingly.");
                 return;
             }
 
             log.info("--- Provisioning '{}/{}' ---", database, collection);
             client.ensureDatabase(database);
             client.ensureContainer(address);
+
+            // DynamoDB: ensureContainer creates the table but does not enable
+            // DynamoDB Streams. Enable a NEW_AND_OLD_IMAGES stream now so the
+            // watcher has a source to read from.
+            if (isDynamo) {
+                ChangeFeedSampleSupport.enableDynamoStream(appConfig, database, collection);
+            }
 
             // Discover one cursor per feed range, positioned at the live tip.
             // Anything written BEFORE this call will not be surfaced.

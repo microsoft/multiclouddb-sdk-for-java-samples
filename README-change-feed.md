@@ -1,28 +1,30 @@
 # Multicloud DB SDK — Change Feed Samples
 
 Command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
-change feed** on Azure Cosmos DB.
+change feed** on Azure Cosmos DB and Amazon DynamoDB.
 
-> ⚠️ **Cosmos DB only (temporary):** These samples require SDK `0.1.0-beta.2`
-> and the Cosmos DB change-feed provider. DynamoDB and Spanner do not yet
-> implement change feed — pointing these samples at a non-Cosmos config will
-> exit immediately with an error. This note will be removed once the remaining
-> providers ship change-feed support.
+> ℹ️ **Provider support:** These samples require SDK `0.1.0-beta.2`. The
+> one-shot (`ChangeFeedSample`) and continuous (`ChangeFeedWatcherSample`)
+> samples run on **Cosmos DB** and **DynamoDB**. Spanner does not yet implement
+> change feed — pointing those samples at a Spanner config exits with an error.
+> Extended retention (`ChangeFeedExtendedRetentionSample`) is **Cosmos-only**
+> because DynamoDB Streams are fixed at 24h server-side.
 
 ## Samples
 
 | Sample | Description |
 |--------|-------------|
-| **`ChangeFeedSample`** (one-shot) | ✅ Supported |
-| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported |
-| **`ChangeFeedExtendedRetentionSample`** (extended retention) | ✅ Supported |
+| **`ChangeFeedSample`** (one-shot) | ✅ Cosmos DB, DynamoDB |
+| **`ChangeFeedWatcherSample`** (continuous) | ✅ Cosmos DB, DynamoDB |
+| **`ChangeFeedExtendedRetentionSample`** (extended retention) | ✅ Cosmos DB only |
 
-> **Provider-specific prerequisites (Cosmos DB).**
+> **Provider-specific prerequisites.**
 >
 > | Environment | Prerequisite |
 > |-------------|-------------|
 > | **Cosmos DB (live)** | Account must have **Continuous Backup** enabled (AVAD is then automatic on every container). |
 > | **Cosmos DB (emulator)** | The sample auto-provisions an AVAD container with a 10-min retention policy (no manual setup). |
+> | **DynamoDB (local or AWS)** | The sample enables a `NEW_AND_OLD_IMAGES` DynamoDB Stream on the table after `ensureContainer` (the SDK does not enable streams by default). Only changes after the stream is enabled are surfaced. |
 >
 > Without the prerequisite, `listCursors` / `readChanges` will surface a
 > portable `UNSUPPORTED_CAPABILITY(stream_not_enabled)` error.
@@ -33,7 +35,7 @@ change feed** on Azure Cosmos DB.
 |--------|----------|------------|
 | **`ChangeFeedSample`** | One-shot demo: writer thread produces a fixed `CREATE` / `UPDATE` / `DELETE` sequence; consumer drains the feed; both exit. | Validating that change feed is wired up end-to-end. |
 | **`ChangeFeedWatcherSample`** | Long-running consumer with **no writes of its own**. Polls the change feed and prints each event as it arrives. `Ctrl+C` → final tally. | Observing changes you make manually in the Azure Portal Data Explorer (or any other writer). |
-| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos (which declares `Capability.EXTENDED_CHANGE_FEED_HISTORY`). | Verifying that the provider can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
+| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos (which declares `Capability.EXTENDED_CHANGE_FEED_HISTORY`); DynamoDB declares this unsupported (Streams are fixed at 24h). | Verifying that the provider can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
 
 The first two samples target the dedicated database/container
 `multiclouddb-sdk-for-java-changefeed/change-feed-demo` (configurable via
@@ -52,6 +54,7 @@ the Todo App or Risk Platform samples.
 | Provider | Emulator / Local config (shipped) | Cloud config (template → copy + fill in) |
 |----------|-----------------------------------|------------------------------------------|
 | **Cosmos DB** | `change-feed-cosmos.properties` | `change-feed-cosmos-cloud.properties.template` |
+| **DynamoDB** | `change-feed-dynamo.properties` | `change-feed-dynamo-cloud.properties.template` |
 
 > Emulator/local configs work out of the box for the extended-retention
 > sample (no credentials needed — the gate runs before any wire I/O).
@@ -67,9 +70,11 @@ the Todo App or Risk Platform samples.
 3. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
 4. [Emulator Setup](#emulator-setup)
    - [Cosmos DB Emulator](#cosmos-db-emulator)
+   - [DynamoDB Local](#dynamodb-local)
 5. [Running the Samples](#running-the-samples)
    - [Build the fat jar](#build-the-fat-jar)
    - [Against the Cosmos DB Emulator](#run-against-the-cosmos-db-emulator)
+   - [Against DynamoDB Local](#run-against-dynamodb-local)
    - [Against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud)
    - [Tuning the watcher poll interval](#tuning-the-watcher-poll-interval)
 6. [Example Output](#example-output)
@@ -93,6 +98,7 @@ the Todo App or Risk Platform samples.
 | JDK  | 17 LTS  | Required — e.g. [Eclipse Adoptium](https://adoptium.net/) |
 | Maven | 3.9+   | Build tool |
 | Azure Cosmos DB Emulator **or** an Azure Cosmos DB account | latest | For Cosmos samples; live accounts must have Continuous Backup enabled (see below) |
+| DynamoDB Local **or** an AWS account | latest | For DynamoDB samples; the sample auto-enables a DynamoDB Stream on the table |
 | Azure CLI | optional | Only needed if you provision the live Cosmos account from the command line |
 
 Make sure `JAVA_HOME` points to JDK 17 and is on your `PATH`:
@@ -376,6 +382,38 @@ the emulator certificate into your JDK truststore (see the
 [Todo App README](README-todo-app.md#5-ssl-certificate-trust) for a detailed
 walk-through that applies here too).
 
+### DynamoDB Local
+
+[DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
+is a downloadable build of DynamoDB (including DynamoDB Streams) for offline
+development.
+
+#### 1. Start DynamoDB Local
+
+```bash
+docker run -p 8000:8000 amazon/dynamodb-local
+```
+
+#### 2. No manual table needed
+
+The samples call `ensureContainer()` (which creates the
+`local__change-feed-demo` table) and then enable a `NEW_AND_OLD_IMAGES`
+DynamoDB Stream on it automatically — so a fresh DynamoDB Local works out of
+the box.
+
+#### 3. Connection details (already in `change-feed-dynamo.properties`)
+
+| Property | Value |
+|----------|-------|
+| Endpoint | `http://localhost:8000` |
+| Region   | `us-east-1` |
+| Credentials | `fakeMyKeyId` / `fakeSecretAccessKey` (DynamoDB Local accepts any) |
+| Database (table prefix) | `local` |
+| Collection (table suffix) | `change-feed-demo` |
+
+> DynamoDB composes the table name as `<database>__<collection>`, so the demo
+> table is `local__change-feed-demo`.
+
 ---
 
 ## Running the Samples
@@ -420,6 +458,34 @@ Then open <https://localhost:8081/_explorer/index.html>, navigate to the
 `multiclouddb-sdk-for-java-changefeed → change-feed-demo` container, and
 add / edit / delete items — each operation prints a line in the watcher
 terminal.
+
+### Run against DynamoDB Local
+
+Point `-Dmulticlouddb.config` at `change-feed-dynamo.properties`. The samples
+create the table and enable a `NEW_AND_OLD_IMAGES` stream automatically.
+
+**One-shot demo:**
+
+```bash
+java -Dmulticlouddb.config=change-feed-dynamo.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+**Continuous watcher:**
+
+```bash
+java -Dmulticlouddb.config=change-feed-dynamo.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Then write to the `local__change-feed-demo` table (e.g. with the
+`aws dynamodb put-item --endpoint-url http://localhost:8000` CLI) — each
+operation prints a line in the watcher terminal. For a live AWS account, copy
+`change-feed-dynamo-cloud.properties.template` to
+`change-feed-dynamo-cloud.properties`, fill in your region, rebuild the fat jar,
+and use `-Dmulticlouddb.config=change-feed-dynamo-cloud.properties`.
 
 ### Run against Cosmos DB (Azure Cloud)
 
@@ -641,6 +707,7 @@ multiclouddb.changefeed.retentionDays=7
 | Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
 |----------|---------------------------------------------|--------------------------|
 | **Azure Cosmos DB** | Supported | Builds client with extended retention, provisions container, runs data-plane reads with cursor persistence. |
+| **Amazon DynamoDB** | Unsupported (Streams fixed at 24h) | The sample exits early — use `ChangeFeedSample` / `ChangeFeedWatcherSample` within the 24h baseline. |
 
 > **This sample performs a full data-plane round-trip** — it provisions a
 > container, writes test items, and consumes change events using
@@ -951,6 +1018,17 @@ Cosmos to this error code. Verify CB is on with the
 The Cosmos emulator caps AVAD retention at **10 minutes**. The sample already
 uses `Duration.ofMinutes(10)` for the emulator path; if you forked the code,
 keep that ceiling.
+
+### `UNSUPPORTED_CAPABILITY(stream_not_enabled)` on DynamoDB
+
+The table exists but has no DynamoDB Stream. The samples enable a
+`NEW_AND_OLD_IMAGES` stream automatically after `ensureContainer`; if you see
+this, you likely pre-created the table without a stream, or pointed the sample
+at a table that wasn't provisioned by it. Enable a stream on the table (e.g.
+`aws dynamodb update-table --table-name local__change-feed-demo
+--stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES`),
+or let the sample create the table for you. Note that only changes committed
+*after* the stream is enabled are surfaced.
 
 ### Watcher prints `Discovered 0 partition cursor(s)`
 

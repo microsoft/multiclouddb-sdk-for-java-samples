@@ -16,16 +16,29 @@ import com.azure.cosmos.models.ThroughputProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClientBuilder;
+import software.amazon.awssdk.services.dynamodb.model.StreamSpecification;
+import software.amazon.awssdk.services.dynamodb.model.StreamViewType;
+import software.amazon.awssdk.services.dynamodb.model.TableDescription;
+import software.amazon.awssdk.services.dynamodb.model.TableStatus;
+
 import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Helpers shared by the change-feed samples ({@link ChangeFeedSample},
  * {@link ChangeFeedWatcherSample}, and {@link ChangeFeedExtendedRetentionSample}).
  * <p>
- * Currently only Azure Cosmos DB is supported. The helper pre-provisions an
- * AVAD container with an explicit {@link ChangeFeedPolicy} on the local
- * emulator (which does not support Continuous Backup).
+ * For Azure Cosmos DB the helper pre-provisions an AVAD container with an
+ * explicit {@link ChangeFeedPolicy} on the local emulator (which does not
+ * support Continuous Backup). For Amazon DynamoDB the helper enables a
+ * DynamoDB Stream (NEW_AND_OLD_IMAGES) on the table, which the SDK's
+ * {@code ensureContainer} does not turn on by default.
  */
 final class ChangeFeedSampleSupport {
 
@@ -101,5 +114,93 @@ final class ChangeFeedSampleSupport {
                         database, collection);
             }
         }
+    }
+
+    /** DynamoDB composes the table name as {@code database__collection}. */
+    private static final String DYNAMO_TABLE_NAME_SEPARATOR = "__";
+
+    /**
+     * Enable a DynamoDB Stream on the table backing {@code database/collection}
+     * so the change feed has a source to read from.
+     * <p>
+     * The SDK's portable {@code ensureContainer} creates the table but does
+     * <b>not</b> enable streams, so {@code listCursors}/{@code readChanges}
+     * would otherwise fail with {@code UNSUPPORTED_CAPABILITY(stream_not_enabled)}.
+     * This helper turns on a {@link StreamViewType#NEW_AND_OLD_IMAGES} stream
+     * (required so DELETE events carry the old image) and waits until the
+     * table is ACTIVE with a stream ARN. It is idempotent: if the stream is
+     * already enabled with the right view type, it is a no-op.
+     * <p>
+     * Call this <b>after</b> {@code ensureContainer} (the table must exist).
+     * Only events committed <b>after</b> the stream is enabled are surfaced.
+     */
+    static void enableDynamoStream(ConfigLoader.AppConfig appConfig,
+                                   String database,
+                                   String collection) {
+        String tableName = database + DYNAMO_TABLE_NAME_SEPARATOR + collection;
+        try (DynamoDbClient ddb = buildDynamoClient(appConfig)) {
+            TableDescription table = ddb.describeTable(b -> b.tableName(tableName)).table();
+            StreamSpecification spec = table.streamSpecification();
+            boolean alreadyEnabled = spec != null
+                    && Boolean.TRUE.equals(spec.streamEnabled())
+                    && spec.streamViewType() == StreamViewType.NEW_AND_OLD_IMAGES
+                    && table.latestStreamArn() != null;
+            if (alreadyEnabled) {
+                log.info("  [provision] DynamoDB Stream already enabled on '{}' (NEW_AND_OLD_IMAGES).",
+                        tableName);
+                return;
+            }
+
+            ddb.updateTable(b -> b.tableName(tableName)
+                    .streamSpecification(s -> s.streamEnabled(true)
+                            .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)));
+
+            waitForTableStreamActive(ddb, tableName);
+            log.info("  [provision] Enabled DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES). "
+                    + "Only changes committed after this point are surfaced.", tableName);
+        }
+    }
+
+    private static void waitForTableStreamActive(DynamoDbClient ddb, String tableName) {
+        long deadline = System.currentTimeMillis() + 60_000L;
+        while (System.currentTimeMillis() < deadline) {
+            TableDescription table = ddb.describeTable(b -> b.tableName(tableName)).table();
+            if (table.tableStatus() == TableStatus.ACTIVE && table.latestStreamArn() != null) {
+                return;
+            }
+            try {
+                Thread.sleep(500L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        log.warn("  [provision] Timed out waiting for DynamoDB Stream on '{}' to become active; "
+                + "proceeding anyway.", tableName);
+    }
+
+    private static DynamoDbClient buildDynamoClient(ConfigLoader.AppConfig appConfig) {
+        Map<String, String> connection = appConfig.sdk().connection();
+        Map<String, String> auth = appConfig.sdk().auth();
+
+        DynamoDbClientBuilder builder = DynamoDbClient.builder()
+                .region(Region.of(connection.getOrDefault("region", "us-east-1")));
+
+        String endpoint = connection.get("endpoint");
+        if (endpoint != null && !endpoint.isBlank()) {
+            builder.endpointOverride(URI.create(endpoint));
+        }
+
+        String accessKeyId = auth.get("accessKeyId");
+        String secretAccessKey = auth.get("secretAccessKey");
+        if (accessKeyId != null && !accessKeyId.isBlank()
+                && secretAccessKey != null && !secretAccessKey.isBlank()) {
+            builder.credentialsProvider(StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(accessKeyId, secretAccessKey)));
+        }
+        // Otherwise fall back to the default AWS credential provider chain
+        // (env vars, system properties, ~/.aws/credentials, IAM roles, SSO).
+
+        return builder.build();
     }
 }
