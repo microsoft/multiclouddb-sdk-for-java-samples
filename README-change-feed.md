@@ -245,7 +245,7 @@ az cosmosdb create \
   --resource-group "$COSMOS_RG" \
   --locations regionName="$COSMOS_LOCATION" \
   --backup-policy-type Continuous \
-  --backup-tier Continuous7Days
+  --continuous-tier Continuous7Days
 ```
 
 **Windows (PowerShell):**
@@ -260,7 +260,7 @@ az cosmosdb create `
   --resource-group $COSMOS_RG `
   --locations "regionName=$COSMOS_LOCATION" `
   --backup-policy-type Continuous `
-  --backup-tier Continuous7Days
+  --continuous-tier Continuous7Days
 ```
 
 Verify CB is enabled:
