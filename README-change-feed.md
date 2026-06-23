@@ -1024,10 +1024,15 @@ keep that ceiling.
 The table exists but has no DynamoDB Stream. The samples enable a
 `NEW_AND_OLD_IMAGES` stream automatically after `ensureContainer`; if you see
 this, you likely pre-created the table without a stream, or pointed the sample
-at a table that wasn't provisioned by it. Enable a stream on the table (e.g.
-`aws dynamodb update-table --table-name local__change-feed-demo
---stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES`),
-or let the sample create the table for you. Note that only changes committed
+at a table that wasn't provisioned by it. Enable a stream on the table:
+
+```bash
+aws dynamodb update-table \
+  --table-name local__change-feed-demo \
+  --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
+```
+
+…or let the sample create the table for you. Note that only changes committed
 *after* the stream is enabled are surfaced.
 
 ### Watcher prints `Discovered 0 partition cursor(s)`

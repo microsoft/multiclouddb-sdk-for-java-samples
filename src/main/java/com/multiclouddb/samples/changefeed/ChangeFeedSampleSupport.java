@@ -155,28 +155,37 @@ final class ChangeFeedSampleSupport {
                     .streamSpecification(s -> s.streamEnabled(true)
                             .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)));
 
-            waitForTableStreamActive(ddb, tableName);
-            log.info("  [provision] Enabled DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES). "
-                    + "Only changes committed after this point are surfaced.", tableName);
+            if (waitForTableStreamActive(ddb, tableName)) {
+                log.info("  [provision] Enabled DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES). "
+                        + "Only changes committed after this point are surfaced.", tableName);
+            } else {
+                log.warn("  [provision] Requested DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES) but it "
+                        + "is not ACTIVE yet; subsequent change-feed reads may fail until it is.", tableName);
+            }
         }
     }
 
-    private static void waitForTableStreamActive(DynamoDbClient ddb, String tableName) {
+    /**
+     * Poll until the table is {@link TableStatus#ACTIVE} with a stream ARN.
+     *
+     * @return {@code true} if the stream became active before the timeout,
+     *         {@code false} if it timed out or the thread was interrupted.
+     */
+    private static boolean waitForTableStreamActive(DynamoDbClient ddb, String tableName) {
         long deadline = System.currentTimeMillis() + 60_000L;
         while (System.currentTimeMillis() < deadline) {
             TableDescription table = ddb.describeTable(b -> b.tableName(tableName)).table();
             if (table.tableStatus() == TableStatus.ACTIVE && table.latestStreamArn() != null) {
-                return;
+                return true;
             }
             try {
                 Thread.sleep(500L);
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
-                return;
+                return false;
             }
         }
-        log.warn("  [provision] Timed out waiting for DynamoDB Stream on '{}' to become active; "
-                + "proceeding anyway.", tableName);
+        return false;
     }
 
     private static DynamoDbClient buildDynamoClient(ConfigLoader.AppConfig appConfig) {
