@@ -66,29 +66,29 @@ the Todo App or Risk Platform samples.
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Provisioning Model — Why Continuous Backup Matters](#provisioning-model--why-continuous-backup-matters)
-3. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
-4. [Emulator Setup](#emulator-setup)
+2. [Emulator Setup](#emulator-setup)
    - [Cosmos DB Emulator](#cosmos-db-emulator)
    - [DynamoDB Local](#dynamodb-local)
-5. [Running the Samples](#running-the-samples)
+3. [Cloud Setup](#cloud-setup)
+   - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
+   - [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
+4. [Running the Samples](#running-the-samples)
    - [Build the fat jar](#build-the-fat-jar)
    - [Against the Cosmos DB Emulator](#run-against-the-cosmos-db-emulator)
    - [Against DynamoDB Local](#run-against-dynamodb-local)
    - [Against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud)
    - [Against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud)
    - [Tuning the watcher poll interval](#tuning-the-watcher-poll-interval)
-6. [Example Output](#example-output)
+5. [Example Output](#example-output)
    - [`ChangeFeedSample` (one-shot)](#changefeedsample-one-shot)
    - [`ChangeFeedWatcherSample` (continuous)](#changefeedwatchersample-continuous)
-7. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
+6. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
    - [Per-provider behaviour](#per-provider-behaviour)
    - [Running `ChangeFeedExtendedRetentionSample`](#running-changefeedextendedretentionsample)
-   - [Example output](#example-output-changefeedextendedretentionsample)
-8. [Configuration Reference](#configuration-reference)
-9. [Cloud Setup](#cloud-setup)
-   - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
-   - [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
+   - [Example output](#example-output-1)
+7. [Provisioning Model — Why Continuous Backup Matters](#provisioning-model--why-continuous-backup-matters)
+8. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
+9. [Configuration Reference](#configuration-reference)
 10. [Troubleshooting](#troubleshooting)
 
 ---
@@ -116,206 +116,6 @@ java -version   # should say 17.x
 > SDK build step is required. To test against a locally-built SDK, see
 > [`../README.md#sdk-version`](README.md#sdk-version) for the
 > `.mvn/maven.config` override workflow.
-
----
-
-## Provisioning Model — Why Continuous Backup Matters
-
-Pull-mode change feed in AVAD mode needs different provisioning depending on the
-target. The samples auto-select the correct path based on the configured
-endpoint:
-
-| Environment | Provisioning | Why |
-|-------------|--------------|-----|
-| **Live Cosmos** (CB enabled) | Plain `ensureContainer()` — no `ChangeFeedPolicy` | When Continuous Backup is on, the AVAD change feed is **available automatically on every container**. Setting an explicit `ChangeFeedPolicy.retentionDuration` is rejected by the service. |
-| **Cosmos emulator** | Pre-provisions container with `ChangeFeedPolicy.createAllVersionsAndDeletesPolicy(Duration.ofMinutes(10))` via a one-shot Cosmos SDK client | The emulator does not support Continuous Backup, so AVAD must be opted into per-container. 10 minutes is the emulator's hard ceiling for AVAD retention. |
-
-Verify a live account has CB enabled:
-
-```bash
-az cosmosdb show --name <account> --resource-group <rg> \
-  --query backupPolicy.type -o tsv
-# Expected output: Continuous
-```
-
-> **Why not `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` against
-> live Cosmos?** On a CB-enabled account the service rejects it with
-> *"The retention duration in the Change Feed policy should not be set when
-> continuous backup mode is enabled for the database account."* — and the SDK
-> currently mis-maps that 400 to `UNSUPPORTED_CAPABILITY(continuous_backup_required)`,
-> which is the opposite of the real cause. Per the
-> [Cosmos docs](https://learn.microsoft.com/en-us/azure/cosmos-db/change-feed-modes?tabs=all-versions-and-deletes),
-> *"Turning on continuous backups creates the all versions and deletes change
-> feed"* — i.e. CB makes AVAD automatic, so the opt-in is unnecessary and
-> harmful on CB accounts.
-
----
-
-## Multiple Partitions — Seeing 3+ Cursors
-
-Each physical partition in Cosmos DB maps to one change-feed cursor returned
-by `listCursors(...)`. A small container with default throughput
-(~400 RU/s) typically has **1 physical partition → 1 cursor**. To see events
-flowing through multiple cursors in the sample output, you need to force
-multiple physical partitions.
-
-### How Cosmos DB assigns physical partitions
-
-| Provisioned throughput | Physical partitions | Cursors |
-|------------------------|---------------------|---------|
-| ≤ 10,000 RU/s         | 1                   | 1       |
-| 10,001–20,000 RU/s    | 2                   | 2       |
-| 20,001–30,000 RU/s    | 3                   | 3       |
-| …                      | …                   | …       |
-
-Cosmos allocates roughly **1 physical partition per 10,000 RU/s**.
-Partitions never merge back, so you can scale throughput up to create
-partitions and then scale it back down to save cost — the partitions
-(and cursors) persist.
-
-### Quick setup: 3 partitions on the emulator
-
-Uncomment and set `multiclouddb.throughput=30000` in
-`change-feed-cosmos.properties`:
-
-```properties
-multiclouddb.throughput=30000
-```
-
-Then run `ChangeFeedSample` or `ChangeFeedWatcherSample` — the provisioning
-step will create the container with 30,000 RU/s (3 physical partitions).
-The sample output will show:
-
-```
-Discovered 3 partition cursor(s) at the live tip.
-  cursor-0: eyJ0eXBlIj…
-  cursor-1: eyJ0eXBlIj…
-  cursor-2: eyJ0eXBlIj…
-```
-
-> **Note:** `createContainerIfNotExists` is a no-op if the container already
-> exists. If you previously ran with the default throughput, **delete the
-> container first** (via the emulator UI or the Azure Portal) so it gets
-> recreated with the higher throughput:
->
-> ```
-> # Emulator UI: https://localhost:8081/_explorer/index.html
-> # Delete the database 'multiclouddb-sdk-for-java-changefeed', then re-run.
-> ```
-
-### Quick setup: 3 partitions on a live Cosmos account
-
-#### 1. Raise the account throughput limit (if needed)
-
-The default limit on many accounts is 4,000 RU/s. In the Azure Portal:
-
-**Azure Portal** → Cosmos DB account → **Settings** → **Account Throughput**
-→ raise the limit to ≥ 50,000 → **Save**.
-
-#### 2. Scale the container to 30,000 RU/s
-
-```powershell
-az cosmosdb sql container throughput update `
-    --account-name <account> -g <rg> `
-    --database-name multiclouddb-sdk-for-java-changefeed `
-    --name change-feed-demo `
-    --throughput 30000
-```
-
-#### 3. Wait for the partition split to complete
-
-The split is asynchronous and typically takes 4–10 minutes. Monitor with:
-
-```powershell
-az cosmosdb sql container throughput show `
-    --account-name <account> -g <rg> `
-    --database-name multiclouddb-sdk-for-java-changefeed `
-    --name change-feed-demo `
-    --query "resource.instantMaximumThroughput"
-```
-
-- `"10000"` → 1 partition (split not started)
-- `"20000"` → 2 partitions (in progress)
-- `"30000"` → 3 partitions (**done** ✓)
-
-#### 4. Scale throughput back down to save cost
-
-Once the split is done, physical partitions **never merge back**, so you
-can scale down immediately and keep the 3 cursors:
-
-```powershell
-az cosmosdb sql container throughput update `
-    --account-name <account> -g <rg> `
-    --database-name multiclouddb-sdk-for-java-changefeed `
-    --name change-feed-demo `
-    --throughput 400
-```
-
-> **Cost note:** 30,000 RU/s costs ~$1.75/hr. Scale down as soon as the
-> split completes — you only need the high throughput long enough for Cosmos
-> to create the physical partitions.
-
-#### 5. Run the watcher and add items with different partition keys
-
-```powershell
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-Then in the **Azure Portal** → **Data Explorer** → `change-feed-demo` →
-**New Item**, add items with varied `partitionKey` values so they hash to
-different physical partitions:
-
-```json
-{"id": "a1", "partitionKey": "1",     "title": "test"}
-{"id": "a2", "partitionKey": "100",   "title": "test"}
-{"id": "a3", "partitionKey": "999",   "title": "test"}
-{"id": "a4", "partitionKey": "abc",   "title": "test"}
-{"id": "a5", "partitionKey": "zzz",   "title": "test"}
-{"id": "a6", "partitionKey": "hello", "title": "test"}
-```
-
-The watcher will print each event with its cursor index. Example output
-showing events distributed across all 3 cursors:
-
-```
-Discovered 3 partition cursor(s) at the live tip.
-  cursor-0: eyJ2IjoxLCJwIjoiY29zbW9z…
-  cursor-1: eyJ2IjoxLCJwIjoiY29zbW9z…
-  cursor-2: eyJ2IjoxLCJwIjoiY29zbW9z…
-
-Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo …
-Press Ctrl+C to stop.
-
-[2026-06-16T18:26:39Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=1, sortKey=a1}      {"id":"a1","partitionKey":"1","title":"test", …}
-[2026-06-16T18:26:47Z] cursor-1  CREATE  MulticloudDbKey{partitionKey=100, sortKey=a2}    {"id":"a2","partitionKey":"100","title":"test", …}
-[2026-06-16T18:26:55Z] cursor-1  CREATE  MulticloudDbKey{partitionKey=999, sortKey=a3}    {"id":"a3","partitionKey":"999","title":"test", …}
-[2026-06-16T18:27:02Z] cursor-2  CREATE  MulticloudDbKey{partitionKey=abc, sortKey=a4}    {"id":"a4","partitionKey":"abc","title":"test", …}
-[2026-06-16T18:27:10Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=zzz, sortKey=a5}    {"id":"a5","partitionKey":"zzz","title":"test", …}
-[2026-06-16T18:27:15Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=hello, sortKey=a6}  {"id":"a6","partitionKey":"hello","title":"test", …}
-```
-
-> **Why do some keys land on the same cursor?** Cosmos hashes the partition
-> key and maps it to a hash range owned by a physical partition. With only 3
-> partitions, some keys inevitably collide. Items with the **same**
-> `partitionKey` always appear on the same cursor.
-
-### Reading cursor identifiers in the sample output
-
-Both `ChangeFeedSample` and `ChangeFeedWatcherSample` now prefix each
-change event with the cursor index (e.g. `cursor-0`, `cursor-1`, …) so
-you can see which physical partition each event came from:
-
-```
-[2025-06-16T09:00:01Z] cursor-0  CREATE  cf-1  {"title":"Event 1","iteration":1}
-[2025-06-16T09:00:01Z] cursor-2  CREATE  cf-2  {"title":"Event 2","iteration":2}
-[2025-06-16T09:00:02Z] cursor-1  UPDATE  cf-1  {"title":"Event 1 (updated)","iteration":99}
-```
-
-Items with different `/partitionKey` values will land in different physical
-partitions, so you'll see events spread across cursors. Items with the
-same partition key always appear on the same cursor.
 
 ---
 
@@ -415,6 +215,237 @@ the box.
 
 > DynamoDB composes the table name as `<database>__<collection>`, so the demo
 > table is `local__change-feed-demo`.
+
+---
+
+## Cloud Setup
+
+### Cosmos DB Cloud Setup
+
+> Run these steps **in order** in the same terminal. Variables set in one step
+> carry forward to the next — do not close the terminal between steps.
+
+#### Step 1 — Create a Continuous-Backup Cosmos account
+
+The change-feed samples require Continuous Backup to be enabled on the target
+Cosmos account so the AVAD change feed is available without additional
+per-container configuration.
+
+**macOS / Linux:**
+
+```bash
+# Pick names
+COSMOS_ACCOUNT=<your-account-name>
+COSMOS_RG=<your-resource-group>
+COSMOS_LOCATION=eastus
+
+# Create a CB-enabled account (tier doesn't matter; standard suffices)
+az cosmosdb create \
+  --name "$COSMOS_ACCOUNT" \
+  --resource-group "$COSMOS_RG" \
+  --locations regionName="$COSMOS_LOCATION" \
+  --backup-policy-type Continuous \
+  --backup-tier Continuous7Days
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$COSMOS_ACCOUNT = '<your-account-name>'
+$COSMOS_RG      = '<your-resource-group>'
+$COSMOS_LOCATION = 'eastus'
+
+az cosmosdb create `
+  --name $COSMOS_ACCOUNT `
+  --resource-group $COSMOS_RG `
+  --locations "regionName=$COSMOS_LOCATION" `
+  --backup-policy-type Continuous `
+  --backup-tier Continuous7Days
+```
+
+Verify CB is enabled:
+
+```bash
+az cosmosdb show --name "$COSMOS_ACCOUNT" -g "$COSMOS_RG" \
+  --query backupPolicy.type -o tsv
+# Expected output: Continuous
+```
+
+> **Already have a Cosmos account on Periodic backup?** You can switch an
+> existing account to Continuous Backup with
+> `az cosmosdb update --backup-policy-type Continuous`. Note that the switch
+> is **one-way** — you cannot revert to Periodic.
+
+> **Don't need to create the database / container ahead of time** — the
+> samples call `ensureDatabase()` / `ensureContainer()` on startup. On a
+> CB-enabled account a plain container is enough; AVAD is automatic.
+
+#### Step 2 — Create the properties file
+
+The cloud properties file is **git-ignored** and must never be committed.
+
+**macOS / Linux:**
+
+```bash
+COSMOS_ENDPOINT=$(az cosmosdb show \
+  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
+  --query documentEndpoint -o tsv)
+
+COSMOS_KEY=$(az cosmosdb keys list \
+  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
+  --query primaryMasterKey -o tsv)
+
+cat > src/main/resources/change-feed-cosmos-cloud.properties << EOF
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
+multiclouddb.connection.key=$COSMOS_KEY
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+EOF
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$COSMOS_ENDPOINT = (az cosmosdb show `
+  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
+  --query documentEndpoint -o tsv)
+
+$COSMOS_KEY = (az cosmosdb keys list `
+  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
+  --query primaryMasterKey -o tsv)
+
+@"
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
+multiclouddb.connection.key=$COSMOS_KEY
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+"@ | Set-Content src\main\resources\change-feed-cosmos-cloud.properties
+```
+
+Verify:
+
+```bash
+cat src/main/resources/change-feed-cosmos-cloud.properties
+```
+
+> **Don't have the Azure CLI?** Get endpoint and key from the
+> [Azure Portal](https://portal.azure.com) → your Cosmos DB account → **Keys**,
+> then create the file manually by copying
+> `src/main/resources/change-feed-cosmos-cloud.properties.template` and filling
+> in the placeholders.
+
+#### Step 3 — Build and run
+
+`ConfigLoader` reads configs from the **fat-jar classpath**, so the runtime
+file must live under `src/main/resources/` **before** you run `mvn package`.
+
+**macOS / Linux:**
+
+```bash
+mvn package -DskipTests
+
+# One-shot demo
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn package -DskipTests
+
+# One-shot demo
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+#### Step 4 — Clean up Cosmos DB resources (optional)
+
+Drop the database (and its single container) when you're done:
+
+```bash
+az cosmosdb sql database delete \
+  --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
+  --name multiclouddb-sdk-for-java-changefeed --yes
+```
+
+Or delete the entire Cosmos account:
+
+```bash
+az cosmosdb delete \
+  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --yes
+```
+
+### DynamoDB Cloud Setup
+
+> Run against a real AWS account. The sample creates the table and enables a
+> `NEW_AND_OLD_IMAGES` DynamoDB Stream automatically — you do not need to create
+> the table or stream by hand.
+
+#### Step 1 — Configure AWS credentials
+
+The SDK and the sample's stream-provisioning helper both use the default AWS
+credential provider chain. Make sure credentials resolve and the identity is
+valid before running:
+
+```bash
+aws configure          # or: aws sso login
+aws sts get-caller-identity   # must succeed (no InvalidClientTokenId)
+```
+
+The principal needs `dynamodb:CreateTable`, `DescribeTable`, `UpdateTable`,
+`PutItem` / `UpdateItem` / `DeleteItem`, plus the Streams actions
+`DescribeStream`, `GetShardIterator`, and `GetRecords`.
+
+#### Step 2 — Create the cloud properties file
+
+```bash
+cp src/main/resources/change-feed-dynamo-cloud.properties.template \
+   src/main/resources/change-feed-dynamo-cloud.properties
+# edit it and set your region, e.g.:
+#   multiclouddb.connection.region=us-east-1
+# leave multiclouddb.connection.endpoint unset to hit the real AWS service
+```
+
+`ConfigLoader` reads configs from the fat-jar classpath, so the runtime file
+must live under `src/main/resources/` **before** you build:
+
+```bash
+mvn package -DskipTests
+```
+
+#### Step 3 — Run the samples
+
+See [Run against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud) under
+**Running the Samples** for the build + run commands (macOS / Linux and
+PowerShell).
+
+#### Step 4 — Clean up DynamoDB resources (optional)
+
+A live table uses on-demand billing. Delete it (the stream is removed with it)
+when you're done:
+
+```bash
+aws dynamodb delete-table \
+  --table-name multiclouddb-sdk-for-java-changefeed__change-feed-demo \
+  --region us-east-1
+```
 
 ---
 
@@ -832,6 +863,206 @@ ChangeFeedWatcherSample for the 24h-baseline data-plane demo.
 
 ---
 
+## Provisioning Model — Why Continuous Backup Matters
+
+Pull-mode change feed in AVAD mode needs different provisioning depending on the
+target. The samples auto-select the correct path based on the configured
+endpoint:
+
+| Environment | Provisioning | Why |
+|-------------|--------------|-----|
+| **Live Cosmos** (CB enabled) | Plain `ensureContainer()` — no `ChangeFeedPolicy` | When Continuous Backup is on, the AVAD change feed is **available automatically on every container**. Setting an explicit `ChangeFeedPolicy.retentionDuration` is rejected by the service. |
+| **Cosmos emulator** | Pre-provisions container with `ChangeFeedPolicy.createAllVersionsAndDeletesPolicy(Duration.ofMinutes(10))` via a one-shot Cosmos SDK client | The emulator does not support Continuous Backup, so AVAD must be opted into per-container. 10 minutes is the emulator's hard ceiling for AVAD retention. |
+
+Verify a live account has CB enabled:
+
+```bash
+az cosmosdb show --name <account> --resource-group <rg> \
+  --query backupPolicy.type -o tsv
+# Expected output: Continuous
+```
+
+> **Why not `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` against
+> live Cosmos?** On a CB-enabled account the service rejects it with
+> *"The retention duration in the Change Feed policy should not be set when
+> continuous backup mode is enabled for the database account."* — and the SDK
+> currently mis-maps that 400 to `UNSUPPORTED_CAPABILITY(continuous_backup_required)`,
+> which is the opposite of the real cause. Per the
+> [Cosmos docs](https://learn.microsoft.com/en-us/azure/cosmos-db/change-feed-modes?tabs=all-versions-and-deletes),
+> *"Turning on continuous backups creates the all versions and deletes change
+> feed"* — i.e. CB makes AVAD automatic, so the opt-in is unnecessary and
+> harmful on CB accounts.
+
+---
+
+## Multiple Partitions — Seeing 3+ Cursors
+
+Each physical partition in Cosmos DB maps to one change-feed cursor returned
+by `listCursors(...)`. A small container with default throughput
+(~400 RU/s) typically has **1 physical partition → 1 cursor**. To see events
+flowing through multiple cursors in the sample output, you need to force
+multiple physical partitions.
+
+### How Cosmos DB assigns physical partitions
+
+| Provisioned throughput | Physical partitions | Cursors |
+|------------------------|---------------------|---------|
+| ≤ 10,000 RU/s         | 1                   | 1       |
+| 10,001–20,000 RU/s    | 2                   | 2       |
+| 20,001–30,000 RU/s    | 3                   | 3       |
+| …                      | …                   | …       |
+
+Cosmos allocates roughly **1 physical partition per 10,000 RU/s**.
+Partitions never merge back, so you can scale throughput up to create
+partitions and then scale it back down to save cost — the partitions
+(and cursors) persist.
+
+### Quick setup: 3 partitions on the emulator
+
+Uncomment and set `multiclouddb.throughput=30000` in
+`change-feed-cosmos.properties`:
+
+```properties
+multiclouddb.throughput=30000
+```
+
+Then run `ChangeFeedSample` or `ChangeFeedWatcherSample` — the provisioning
+step will create the container with 30,000 RU/s (3 physical partitions).
+The sample output will show:
+
+```
+Discovered 3 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIj…
+  cursor-1: eyJ0eXBlIj…
+  cursor-2: eyJ0eXBlIj…
+```
+
+> **Note:** `createContainerIfNotExists` is a no-op if the container already
+> exists. If you previously ran with the default throughput, **delete the
+> container first** (via the emulator UI or the Azure Portal) so it gets
+> recreated with the higher throughput:
+>
+> ```
+> # Emulator UI: https://localhost:8081/_explorer/index.html
+> # Delete the database 'multiclouddb-sdk-for-java-changefeed', then re-run.
+> ```
+
+### Quick setup: 3 partitions on a live Cosmos account
+
+#### 1. Raise the account throughput limit (if needed)
+
+The default limit on many accounts is 4,000 RU/s. In the Azure Portal:
+
+**Azure Portal** → Cosmos DB account → **Settings** → **Account Throughput**
+→ raise the limit to ≥ 50,000 → **Save**.
+
+#### 2. Scale the container to 30,000 RU/s
+
+```powershell
+az cosmosdb sql container throughput update `
+    --account-name <account> -g <rg> `
+    --database-name multiclouddb-sdk-for-java-changefeed `
+    --name change-feed-demo `
+    --throughput 30000
+```
+
+#### 3. Wait for the partition split to complete
+
+The split is asynchronous and typically takes 4–10 minutes. Monitor with:
+
+```powershell
+az cosmosdb sql container throughput show `
+    --account-name <account> -g <rg> `
+    --database-name multiclouddb-sdk-for-java-changefeed `
+    --name change-feed-demo `
+    --query "resource.instantMaximumThroughput"
+```
+
+- `"10000"` → 1 partition (split not started)
+- `"20000"` → 2 partitions (in progress)
+- `"30000"` → 3 partitions (**done** ✓)
+
+#### 4. Scale throughput back down to save cost
+
+Once the split is done, physical partitions **never merge back**, so you
+can scale down immediately and keep the 3 cursors:
+
+```powershell
+az cosmosdb sql container throughput update `
+    --account-name <account> -g <rg> `
+    --database-name multiclouddb-sdk-for-java-changefeed `
+    --name change-feed-demo `
+    --throughput 400
+```
+
+> **Cost note:** 30,000 RU/s costs ~$1.75/hr. Scale down as soon as the
+> split completes — you only need the high throughput long enough for Cosmos
+> to create the physical partitions.
+
+#### 5. Run the watcher and add items with different partition keys
+
+```powershell
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Then in the **Azure Portal** → **Data Explorer** → `change-feed-demo` →
+**New Item**, add items with varied `partitionKey` values so they hash to
+different physical partitions:
+
+```json
+{"id": "a1", "partitionKey": "1",     "title": "test"}
+{"id": "a2", "partitionKey": "100",   "title": "test"}
+{"id": "a3", "partitionKey": "999",   "title": "test"}
+{"id": "a4", "partitionKey": "abc",   "title": "test"}
+{"id": "a5", "partitionKey": "zzz",   "title": "test"}
+{"id": "a6", "partitionKey": "hello", "title": "test"}
+```
+
+The watcher will print each event with its cursor index. Example output
+showing events distributed across all 3 cursors:
+
+```
+Discovered 3 partition cursor(s) at the live tip.
+  cursor-0: eyJ2IjoxLCJwIjoiY29zbW9z…
+  cursor-1: eyJ2IjoxLCJwIjoiY29zbW9z…
+  cursor-2: eyJ2IjoxLCJwIjoiY29zbW9z…
+
+Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo …
+Press Ctrl+C to stop.
+
+[2026-06-16T18:26:39Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=1, sortKey=a1}      {"id":"a1","partitionKey":"1","title":"test", …}
+[2026-06-16T18:26:47Z] cursor-1  CREATE  MulticloudDbKey{partitionKey=100, sortKey=a2}    {"id":"a2","partitionKey":"100","title":"test", …}
+[2026-06-16T18:26:55Z] cursor-1  CREATE  MulticloudDbKey{partitionKey=999, sortKey=a3}    {"id":"a3","partitionKey":"999","title":"test", …}
+[2026-06-16T18:27:02Z] cursor-2  CREATE  MulticloudDbKey{partitionKey=abc, sortKey=a4}    {"id":"a4","partitionKey":"abc","title":"test", …}
+[2026-06-16T18:27:10Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=zzz, sortKey=a5}    {"id":"a5","partitionKey":"zzz","title":"test", …}
+[2026-06-16T18:27:15Z] cursor-0  CREATE  MulticloudDbKey{partitionKey=hello, sortKey=a6}  {"id":"a6","partitionKey":"hello","title":"test", …}
+```
+
+> **Why do some keys land on the same cursor?** Cosmos hashes the partition
+> key and maps it to a hash range owned by a physical partition. With only 3
+> partitions, some keys inevitably collide. Items with the **same**
+> `partitionKey` always appear on the same cursor.
+
+### Reading cursor identifiers in the sample output
+
+Both `ChangeFeedSample` and `ChangeFeedWatcherSample` now prefix each
+change event with the cursor index (e.g. `cursor-0`, `cursor-1`, …) so
+you can see which physical partition each event came from:
+
+```
+[2025-06-16T09:00:01Z] cursor-0  CREATE  cf-1  {"title":"Event 1","iteration":1}
+[2025-06-16T09:00:01Z] cursor-2  CREATE  cf-2  {"title":"Event 2","iteration":2}
+[2025-06-16T09:00:02Z] cursor-1  UPDATE  cf-1  {"title":"Event 1 (updated)","iteration":99}
+```
+
+Items with different `/partitionKey` values will land in different physical
+partitions, so you'll see events spread across cursors. Items with the
+same partition key always appear on the same cursor.
+
+---
+
 ## Configuration Reference
 
 Both data-plane samples (`ChangeFeedSample`, `ChangeFeedWatcherSample`) read
@@ -861,237 +1092,6 @@ Shipped properties files:
 | `src/main/resources/change-feed-cosmos.properties` | Cosmos emulator | yes |
 | `src/main/resources/change-feed-cosmos-cloud.properties.template` | Cosmos cloud (template — copy and fill in) | yes |
 | `src/main/resources/change-feed-cosmos-cloud.properties` | Cosmos cloud (your real endpoint + key) | **no** (gitignored) |
-
----
-
-## Cloud Setup
-
-### Cosmos DB Cloud Setup
-
-> Run these steps **in order** in the same terminal. Variables set in one step
-> carry forward to the next — do not close the terminal between steps.
-
-#### Step 1 — Create a Continuous-Backup Cosmos account
-
-The change-feed samples require Continuous Backup to be enabled on the target
-Cosmos account so the AVAD change feed is available without additional
-per-container configuration.
-
-**macOS / Linux:**
-
-```bash
-# Pick names
-COSMOS_ACCOUNT=<your-account-name>
-COSMOS_RG=<your-resource-group>
-COSMOS_LOCATION=eastus
-
-# Create a CB-enabled account (tier doesn't matter; standard suffices)
-az cosmosdb create \
-  --name "$COSMOS_ACCOUNT" \
-  --resource-group "$COSMOS_RG" \
-  --locations regionName="$COSMOS_LOCATION" \
-  --backup-policy-type Continuous \
-  --backup-tier Continuous7Days
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$COSMOS_ACCOUNT = '<your-account-name>'
-$COSMOS_RG      = '<your-resource-group>'
-$COSMOS_LOCATION = 'eastus'
-
-az cosmosdb create `
-  --name $COSMOS_ACCOUNT `
-  --resource-group $COSMOS_RG `
-  --locations "regionName=$COSMOS_LOCATION" `
-  --backup-policy-type Continuous `
-  --backup-tier Continuous7Days
-```
-
-Verify CB is enabled:
-
-```bash
-az cosmosdb show --name "$COSMOS_ACCOUNT" -g "$COSMOS_RG" \
-  --query backupPolicy.type -o tsv
-# Expected output: Continuous
-```
-
-> **Already have a Cosmos account on Periodic backup?** You can switch an
-> existing account to Continuous Backup with
-> `az cosmosdb update --backup-policy-type Continuous`. Note that the switch
-> is **one-way** — you cannot revert to Periodic.
-
-> **Don't need to create the database / container ahead of time** — the
-> samples call `ensureDatabase()` / `ensureContainer()` on startup. On a
-> CB-enabled account a plain container is enough; AVAD is automatic.
-
-#### Step 2 — Create the properties file
-
-The cloud properties file is **git-ignored** and must never be committed.
-
-**macOS / Linux:**
-
-```bash
-COSMOS_ENDPOINT=$(az cosmosdb show \
-  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
-  --query documentEndpoint -o tsv)
-
-COSMOS_KEY=$(az cosmosdb keys list \
-  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
-  --query primaryMasterKey -o tsv)
-
-cat > src/main/resources/change-feed-cosmos-cloud.properties << EOF
-multiclouddb.provider=cosmos
-multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
-multiclouddb.connection.key=$COSMOS_KEY
-multiclouddb.connection.connectionMode=gateway
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-EOF
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$COSMOS_ENDPOINT = (az cosmosdb show `
-  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
-  --query documentEndpoint -o tsv)
-
-$COSMOS_KEY = (az cosmosdb keys list `
-  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
-  --query primaryMasterKey -o tsv)
-
-@"
-multiclouddb.provider=cosmos
-multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
-multiclouddb.connection.key=$COSMOS_KEY
-multiclouddb.connection.connectionMode=gateway
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-"@ | Set-Content src\main\resources\change-feed-cosmos-cloud.properties
-```
-
-Verify:
-
-```bash
-cat src/main/resources/change-feed-cosmos-cloud.properties
-```
-
-> **Don't have the Azure CLI?** Get endpoint and key from the
-> [Azure Portal](https://portal.azure.com) → your Cosmos DB account → **Keys**,
-> then create the file manually by copying
-> `src/main/resources/change-feed-cosmos-cloud.properties.template` and filling
-> in the placeholders.
-
-#### Step 3 — Build and run
-
-`ConfigLoader` reads configs from the **fat-jar classpath**, so the runtime
-file must live under `src/main/resources/` **before** you run `mvn package`.
-
-**macOS / Linux:**
-
-```bash
-mvn package -DskipTests
-
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-mvn package -DskipTests
-
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-#### Step 4 — Clean up Cosmos DB resources (optional)
-
-Drop the database (and its single container) when you're done:
-
-```bash
-az cosmosdb sql database delete \
-  --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
-  --name multiclouddb-sdk-for-java-changefeed --yes
-```
-
-Or delete the entire Cosmos account:
-
-```bash
-az cosmosdb delete \
-  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --yes
-```
-
-### DynamoDB Cloud Setup
-
-> Run against a real AWS account. The sample creates the table and enables a
-> `NEW_AND_OLD_IMAGES` DynamoDB Stream automatically — you do not need to create
-> the table or stream by hand.
-
-#### Step 1 — Configure AWS credentials
-
-The SDK and the sample's stream-provisioning helper both use the default AWS
-credential provider chain. Make sure credentials resolve and the identity is
-valid before running:
-
-```bash
-aws configure          # or: aws sso login
-aws sts get-caller-identity   # must succeed (no InvalidClientTokenId)
-```
-
-The principal needs `dynamodb:CreateTable`, `DescribeTable`, `UpdateTable`,
-`PutItem` / `UpdateItem` / `DeleteItem`, plus the Streams actions
-`DescribeStream`, `GetShardIterator`, and `GetRecords`.
-
-#### Step 2 — Create the cloud properties file
-
-```bash
-cp src/main/resources/change-feed-dynamo-cloud.properties.template \
-   src/main/resources/change-feed-dynamo-cloud.properties
-# edit it and set your region, e.g.:
-#   multiclouddb.connection.region=us-east-1
-# leave multiclouddb.connection.endpoint unset to hit the real AWS service
-```
-
-`ConfigLoader` reads configs from the fat-jar classpath, so the runtime file
-must live under `src/main/resources/` **before** you build:
-
-```bash
-mvn package -DskipTests
-```
-
-#### Step 3 — Run the samples
-
-See [Run against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud) under
-**Running the Samples** for the build + run commands (macOS / Linux and
-PowerShell).
-
-#### Step 4 — Clean up DynamoDB resources (optional)
-
-A live table uses on-demand billing. Delete it (the stream is removed with it)
-when you're done:
-
-```bash
-aws dynamodb delete-table \
-  --table-name multiclouddb-sdk-for-java-changefeed__change-feed-demo \
-  --region us-east-1
-```
 
 ---
 
