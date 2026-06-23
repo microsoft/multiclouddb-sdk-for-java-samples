@@ -87,6 +87,7 @@ the Todo App or Risk Platform samples.
 8. [Configuration Reference](#configuration-reference)
 9. [Cloud Setup](#cloud-setup)
    - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
+   - [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
 10. [Troubleshooting](#troubleshooting)
 
 ---
@@ -991,6 +992,85 @@ Or delete the entire Cosmos account:
 ```bash
 az cosmosdb delete \
   --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --yes
+```
+
+### DynamoDB Cloud Setup
+
+> Run against a real AWS account. The sample creates the table and enables a
+> `NEW_AND_OLD_IMAGES` DynamoDB Stream automatically — you do not need to create
+> the table or stream by hand.
+
+#### Step 1 — Configure AWS credentials
+
+The SDK and the sample's stream-provisioning helper both use the default AWS
+credential provider chain. Make sure credentials resolve and the identity is
+valid before running:
+
+```bash
+aws configure          # or: aws sso login
+aws sts get-caller-identity   # must succeed (no InvalidClientTokenId)
+```
+
+The principal needs `dynamodb:CreateTable`, `DescribeTable`, `UpdateTable`,
+`PutItem` / `UpdateItem` / `DeleteItem`, plus the Streams actions
+`DescribeStream`, `GetShardIterator`, and `GetRecords`.
+
+#### Step 2 — Create the cloud properties file
+
+```bash
+cp src/main/resources/change-feed-dynamo-cloud.properties.template \
+   src/main/resources/change-feed-dynamo-cloud.properties
+# edit it and set your region, e.g.:
+#   multiclouddb.connection.region=us-east-1
+# leave multiclouddb.connection.endpoint unset to hit the real AWS service
+```
+
+`ConfigLoader` reads configs from the fat-jar classpath, so the runtime file
+must live under `src/main/resources/` **before** you build:
+
+```bash
+mvn package -DskipTests
+```
+
+#### Step 3 — Run the samples
+
+**macOS / Linux:**
+
+```bash
+# One-shot demo
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# One-shot demo
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+#### Step 4 — Clean up DynamoDB resources (optional)
+
+A live table uses on-demand billing. Delete it (the stream is removed with it)
+when you're done:
+
+```bash
+aws dynamodb delete-table \
+  --table-name multiclouddb-sdk-for-java-changefeed__change-feed-demo \
+  --region us-east-1
 ```
 
 ---

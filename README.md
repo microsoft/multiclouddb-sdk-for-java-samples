@@ -138,22 +138,42 @@ Three samples demonstrate the SDK's pull-mode change feed. They use the dedicate
   enable a `NEW_AND_OLD_IMAGES` stream on the table after creating it. Only
   changes committed *after* the stream is enabled are surfaced.
 
-**First-time setup for live Cosmos (one-time per checkout):**
+**First-time setup for live cloud accounts (one-time per checkout):**
 
-The `change-feed-cosmos-cloud.properties` file is gitignored; only the
-`.template` ships with the repo. `ConfigLoader` reads configs from the
-fat-jar classpath, so the runtime file must live under
-`src/main/resources/` *before* you run `mvn package`:
+Cloud configs (`*-cloud.properties`) are gitignored; only the `.template` files
+ship with the repo. `ConfigLoader` reads configs from the fat-jar classpath, so
+the runtime file must live under `src/main/resources/` *before* you run
+`mvn package`. Copy the template for the provider you want, fill it in, then
+rebuild the fat jar.
+
+**Cosmos DB (Azure):**
 
 ```bash
 cp src/main/resources/change-feed-cosmos-cloud.properties.template \
    src/main/resources/change-feed-cosmos-cloud.properties
-# edit src/main/resources/change-feed-cosmos-cloud.properties to fill in endpoint + key
+# edit change-feed-cosmos-cloud.properties to fill in endpoint + key
 mvn package -DskipTests
 ```
 
-After this one-time copy you can re-use the resulting fat jar for both
+**DynamoDB (AWS):**
+
+```bash
+cp src/main/resources/change-feed-dynamo-cloud.properties.template \
+   src/main/resources/change-feed-dynamo-cloud.properties
+# edit change-feed-dynamo-cloud.properties to set multiclouddb.connection.region
+# credentials come from the default AWS provider chain — make sure
+#   `aws sts get-caller-identity` succeeds first (e.g. `aws configure` / `aws sso login`)
+mvn package -DskipTests
+```
+
+After this one-time copy you can re-use the resulting fat jar for the
 change-feed samples below.
+
+> **DynamoDB IAM permissions.** The principal needs `dynamodb:CreateTable`,
+> `DescribeTable`, `UpdateTable` (to enable the stream), `PutItem` / `UpdateItem`
+> / `DeleteItem`, plus the Streams actions `DescribeStream`, `GetShardIterator`,
+> and `GetRecords`. A live table uses on-demand billing — delete it when you're
+> done to avoid charges.
 
 #### 1. One-shot change feed demo (`ChangeFeedSample`)
 
@@ -178,6 +198,11 @@ java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
 java -Dmulticlouddb.config=change-feed-dynamo.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
      com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Live DynamoDB (AWS) — see "First-time setup" above; creds from the AWS chain
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
 ```
 
 **Windows (PowerShell):**
@@ -199,6 +224,11 @@ java -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
 
 # DynamoDB Local (auto-enables a NEW_AND_OLD_IMAGES stream)
 java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Live DynamoDB (AWS) — see "First-time setup" above; creds from the AWS chain
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedSample
 ```
@@ -230,6 +260,11 @@ java -Dmulticlouddb.config=change-feed-dynamo.properties \
      -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 
+# Live DynamoDB (AWS) — see "First-time setup" above; creds from the AWS chain
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
 # Override the poll interval (milliseconds; default 1000)
 java -Dchangefeed.poll.intervalMs=500 \
      -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
@@ -252,6 +287,11 @@ java -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
 
 # DynamoDB Local (auto-enables a NEW_AND_OLD_IMAGES stream)
 java "-Dmulticlouddb.config=change-feed-dynamo.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+
+# Live DynamoDB (AWS) — see "First-time setup" above; creds from the AWS chain
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 
@@ -323,10 +363,10 @@ Press Ctrl+C to stop.
 | `risk-platform-dynamo-cloud.properties.template` | DynamoDB (cloud) |
 | `change-feed-cosmos.properties` | Cosmos DB emulator (data-plane samples + extended-retention build-time gate) |
 | `change-feed-cosmos-cloud.properties.template` | Cosmos DB (cloud) — copy to `src/main/resources/change-feed-cosmos-cloud.properties` (gitignored), then fill in endpoint + key |
+| `change-feed-dynamo.properties` | Amazon DynamoDB Local (data-plane samples; auto-enables a stream) |
+| `change-feed-dynamo-cloud.properties.template` | DynamoDB (cloud) — copy to `src/main/resources/change-feed-dynamo-cloud.properties` (gitignored), then set the region |
 | `change-feed-spanner.properties` | ⏳ Reserved for future Spanner change-feed support |
 | `change-feed-spanner-cloud.properties.template` | ⏳ Reserved for future Spanner change-feed support |
-| `change-feed-dynamo.properties` | ⏳ Reserved for future DynamoDB change-feed support |
-| `change-feed-dynamo-cloud.properties.template` | ⏳ Reserved for future DynamoDB change-feed support |
 
 ---
 
