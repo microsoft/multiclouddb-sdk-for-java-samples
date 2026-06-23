@@ -76,6 +76,7 @@ the Todo App or Risk Platform samples.
    - [Against the Cosmos DB Emulator](#run-against-the-cosmos-db-emulator)
    - [Against DynamoDB Local](#run-against-dynamodb-local)
    - [Against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud)
+   - [Against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud)
    - [Tuning the watcher poll interval](#tuning-the-watcher-poll-interval)
 6. [Example Output](#example-output)
    - [`ChangeFeedSample` (one-shot)](#changefeedsample-one-shot)
@@ -483,10 +484,9 @@ java -Dmulticlouddb.config=change-feed-dynamo.properties \
 
 Then write to the `local__change-feed-demo` table (e.g. with the
 `aws dynamodb put-item --endpoint-url http://localhost:8000` CLI) — each
-operation prints a line in the watcher terminal. For a live AWS account, copy
-`change-feed-dynamo-cloud.properties.template` to
-`change-feed-dynamo-cloud.properties`, fill in your region, rebuild the fat jar,
-and use `-Dmulticlouddb.config=change-feed-dynamo-cloud.properties`.
+operation prints a line in the watcher terminal. To run against a live AWS
+account instead, see
+[Run against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud) below.
 
 ### Run against Cosmos DB (Azure Cloud)
 
@@ -526,6 +526,49 @@ java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
 
 # Continuous watcher
 java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+### Run against DynamoDB (AWS Cloud)
+
+> **First time?** Complete the [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
+> below to configure AWS credentials and create your properties file.
+
+Same flow as DynamoDB Local, but point `-Dmulticlouddb.config` at the cloud
+config. Credentials come from the default AWS provider chain (run
+`aws sts get-caller-identity` to confirm they resolve). `ConfigLoader` reads
+configs from the fat-jar classpath, so the runtime file must live under
+`src/main/resources/` **before** you run `mvn package`.
+
+**macOS / Linux:**
+
+```bash
+mvn package -DskipTests
+
+# One-shot demo
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
+     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
+     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+**Windows (PowerShell):**
+
+```powershell
+mvn package -DskipTests
+
+# One-shot demo
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
+     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
+     com.multiclouddb.samples.changefeed.ChangeFeedSample
+
+# Continuous watcher
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
      -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
@@ -1034,33 +1077,9 @@ mvn package -DskipTests
 
 #### Step 3 — Run the samples
 
-**macOS / Linux:**
-
-```bash
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-dynamo-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
+See [Run against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud) under
+**Running the Samples** for the build + run commands (macOS / Linux and
+PowerShell).
 
 #### Step 4 — Clean up DynamoDB resources (optional)
 
