@@ -203,7 +203,7 @@ final class ChangeFeedSampleSupport {
         Map<String, String> auth = appConfig.sdk().auth();
 
         DynamoDbClientBuilder builder = DynamoDbClient.builder()
-                .region(Region.of(connection.getOrDefault("region", "us-east-1")));
+                .region(Region.of(resolveRegion(connection)));
 
         String endpoint = connection.get("endpoint");
         if (endpoint != null && !endpoint.isBlank()) {
@@ -221,5 +221,17 @@ final class ChangeFeedSampleSupport {
         // (env vars, system properties, ~/.aws/credentials, IAM roles, SSO).
 
         return builder.build();
+    }
+
+    private static String resolveRegion(Map<String, String> connection) {
+        String region = connection.getOrDefault("region", "us-east-1");
+        region = region == null ? "" : region.trim();
+        if (region.isEmpty() || region.startsWith("<")) {
+            throw new IllegalStateException(
+                    "Invalid AWS region '" + region + "'. Set 'multiclouddb.connection.region' in "
+                    + "your properties file to a valid region (e.g., us-east-1) before running "
+                    + "against AWS DynamoDB.");
+        }
+        return region;
     }
 }

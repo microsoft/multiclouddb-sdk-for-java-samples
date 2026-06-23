@@ -1023,9 +1023,12 @@ Discovered 3 partition cursor(s) at the live tip.
 > container first** (via the emulator UI or the Azure Portal) so it gets
 > recreated with the higher throughput:
 >
-> `` > # Emulator UI: https://localhost:8081/_explorer/index.html
+> ```
+> # Emulator UI: https://localhost:8081/_explorer/index.html
 > # Delete the database 'multiclouddb-sdk-for-java-changefeed', then re-run.
-> ` ### Quick setup: 3 partitions on a live Cosmos account
+> ```
+
+### Quick setup: 3 partitions on a live Cosmos account
 
 #### 1. Raise the account throughput limit (if needed)
 
@@ -1183,7 +1186,7 @@ Fix: ensure `azure-cosmos.version` in `pom.xml` is **≥ 4.81.0** and rebuild:
 mvn -q -DskipTests clean package
 ```
 
-### `BadRequest: The retention duration in the Change Feed policy should not be set when continuous backup mode is enabled 
+### `BadRequest: The retention duration in the Change Feed policy should not be set when continuous backup mode is enabled`
 You hit the CB+AVAD interaction described in
 [Provisioning Model](#provisioning-model--why-continuous-backup-matters). The
 samples already avoid this on live accounts; if you see it, you likely modified
@@ -1218,7 +1221,7 @@ aws dynamodb update-table --table-name local__change-feed-demo --endpoint-url ht
 …or let the sample create the table for you. Note that only changes committed
 *after* the stream is enabled are surfaced.
 
-### Watcher prints `Discovered 0 partition cursor(s) 
+### Watcher prints `Discovered 0 partition cursor(s)`
 The container doesn't exist yet, or you ran the watcher against a different
 container than the one you're writing to. Confirm `multiclouddb.database` /
 `multiclouddb.collection` in your config match what you're editing in Data
@@ -1238,7 +1241,7 @@ Import the emulator's self-signed certificate into your JDK truststore — see
 the [Todo App README's SSL section](README-todo-app.md#5-ssl-certificate-trust)
 for the full walk-through.
 
-### `Could not find artifact com.microsoft.multiclouddb:multiclouddb-api:jar:<version> 
+### `Could not find artifact com.microsoft.multiclouddb:multiclouddb-api:jar:<version>`
 You likely have a stale `.mvn/maven.config` left over from local SDK testing.
 Either delete `.mvn/maven.config` (defaults will resolve `0.1.0-beta.2` from
 Maven Central) or update the override to a version actually installed in your
