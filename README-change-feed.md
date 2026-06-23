@@ -490,8 +490,9 @@ account instead, see
 
 ### Run against Cosmos DB (Azure Cloud)
 
-> **First time?** Complete the [Cloud Setup](#cloud-setup) below to create your
-> properties file and provision a CB-enabled Cosmos DB account.
+> **First time?** Complete the [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
+> below to create your properties file and provision a CB-enabled Cosmos DB
+> account.
 
 `ConfigLoader` reads configs from the fat-jar classpath, so the runtime file
 must live under `src/main/resources/` **before** you run `mvn package`. After
