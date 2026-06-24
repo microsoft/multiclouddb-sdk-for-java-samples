@@ -380,6 +380,12 @@ Setup is complete. To build, run, and later clean up, see
 
 ## Running the Samples
 
+> **PowerShell users:** always wrap `-D...` JVM arguments in quotes, e.g.
+> `java "-Dmulticlouddb.config=change-feed-dynamo.properties" -cp ...`.
+> Without quotes, PowerShell splits the token and Java fails with
+> `Could not find or load main class .config=...`. The quotes are harmless on
+> bash/zsh, so the quoted form below works on every shell.
+
 ### Build the fat jar
 
 The samples are launched as plain `java -cp <jar> <MainClass>` invocations, so
@@ -491,53 +497,53 @@ create the table and enable a `NEW_AND_OLD_IMAGES` stream automatically.
 **One-shot demo:**
 
 ```bash
-java -Dmulticlouddb.config=change-feed-dynamo.properties -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedSample
+java "-Dmulticlouddb.config=change-feed-dynamo.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedSample
 ```
 
 Example output:
 
 ```
 === Multicloud DB Change Feed Sample ===
-Provider: Amazon DynamoDB
-Mode    : LIVE
-
+Provider: AWS DynamoDB
 --- Provisioning 'local/change-feed-demo' ---
-
+  [provision] Enabled DynamoDB Stream on 'local__change-feed-demo' (NEW_AND_OLD_IMAGES). Only changes committed after this point are surfaced.
 --- listCursors (live tip) ---
   Discovered 1 partition cursor(s)
-  cursor-0: eyJ0eXBlIjoiRHluYW1vIiwic2hhcmRJZCI6…
-
+  cursor-0: eyJ2IjoxLCJwIjoiZHluYW1vIiwiciI6ImxvY2FsL2NoYW5nZS1mZWVkLWRlbW8iLCJpIjoxNzgyMjU4…
 --- readChanges (consuming events) ---
+  Started 1 parallel consumer thread(s).
   [writer] upsert cf-1
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-23T23:40:00Z
   [writer] upsert cf-2
   [writer] upsert cf-3
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-23T23:40:00Z
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-23T23:40:00Z
   [writer] upsert cf-4
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-23T23:40:00Z
   [writer] upsert cf-5
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-23T23:40:00Z
   [writer] upsert cf-6
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-23T23:40:00Z
   [writer] update cf-1
   [writer] delete cf-1
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-
+  [cursor-0] UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-23T23:40:00Z
+  [cursor-0] DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-23T23:40:00Z
   Total events observed: 8
-
 --- Cursor token round-trip ---
-  Persisted token (truncated): {"shardId":"shardId-00000001...","sequenceNumber":...
-  Resumed cursor read 0 new events (expected — no further writes)
-
+  Persisted token (truncated): eyJ2IjoxLCJwIjoiZHluYW1vIiwiciI6ImxvY2FsL2NoYW5nZS1mZWVkLWRl…
+  Resumed cursor read 0 event(s); hasMore=false, terminal=false
 === Sample complete ===
 ```
+
+> **Note:** the number of events observed and the exact interleaving of
+> `[writer]` / `[cursor-0]` lines vary between runs — the consumer starts at the
+> live stream tip, so writes that land before it attaches may not all be
+> surfaced in a single short run.
 
 **Continuous watcher:**
 
 ```bash
-java -Dmulticlouddb.config=change-feed-dynamo.properties -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+java "-Dmulticlouddb.config=change-feed-dynamo.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 Then write to the `local__change-feed-demo` table (e.g. with the
