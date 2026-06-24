@@ -419,7 +419,7 @@ Example output:
 ```
 === Multicloud DB Change Feed Sample ===
 Provider: Azure Cosmos DB
-Mode    : LIVE
+Mode    : EMULATOR
 
 --- Provisioning 'multiclouddb-sdk-for-java-changefeed/change-feed-demo' ---
 
@@ -470,7 +470,7 @@ Example output:
 ```
 === Multicloud DB Change Feed Watcher ===
 Provider     : Azure Cosmos DB
-Mode         : LIVE
+Mode         : EMULATOR
 Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
 Poll interval: 1000 ms
 
@@ -556,8 +556,7 @@ Example output:
 
 ```
 === Multicloud DB Change Feed Watcher ===
-Provider     : Amazon DynamoDB
-Mode         : LIVE
+Provider     : AWS DynamoDB
 Container    : local/change-feed-demo
 Poll interval: 1000 ms
 
@@ -710,8 +709,7 @@ Example output:
 
 ```
 === Multicloud DB Change Feed Sample ===
-Provider: Amazon DynamoDB
-Mode    : LIVE
+Provider: AWS DynamoDB
 
 --- Provisioning 'multiclouddb-sdk-for-java-changefeed/change-feed-demo' ---
 
@@ -756,8 +754,7 @@ Example output:
 
 ```
 === Multicloud DB Change Feed Watcher ===
-Provider     : Amazon DynamoDB
-Mode         : LIVE
+Provider     : AWS DynamoDB
 Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
 Poll interval: 1000 ms
 
