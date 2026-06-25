@@ -14,6 +14,14 @@
     <logger name="io.netty" level="WARN"/>
     <logger name="reactor" level="WARN"/>
 
+    <!--
+      DefaultAzureCredential probes Managed Identity (IMDS) before falling back
+      to the Azure CLI / env credentials. On a developer machine there is no
+      Managed Identity, so MSAL logs a benign "Identity not found" ERROR/WARN
+      on every run. Auth still succeeds via the fallback, so silence the noise.
+    -->
+    <logger name="com.microsoft.aad.msal4j" level="OFF"/>
+
     <logger name="com.multiclouddb" level="WARN"/>
     <logger name="com.multiclouddb.provider" level="ERROR"/>
     <logger name="com.multiclouddb.samples" level="INFO"/>

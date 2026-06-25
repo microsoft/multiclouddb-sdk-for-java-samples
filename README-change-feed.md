@@ -730,7 +730,10 @@ the same set of keys from the properties file pointed to by
 |-----|-----------|---------|-------|
 | `multiclouddb.provider` | yes | — | `cosmos` |
 | `multiclouddb.connection.endpoint` | yes | — | `https://localhost:8081` (emulator) or `https://<account>.documents.azure.com:443/` (cloud) |
-| `multiclouddb.connection.key` | yes | — | Cosmos primary master key. |
+| `multiclouddb.connection.key` | conditional | — | Cosmos primary master key. Required for **master-key auth**; **omit** for Entra ID auth. |
+| `multiclouddb.connection.subscriptionId` | conditional | — | Entra ID only. Azure subscription owning the account (`az account show --query id -o tsv`). |
+| `multiclouddb.connection.resourceGroupName` | conditional | — | Entra ID only. Resource group of the Cosmos account. |
+| `multiclouddb.connection.tenantId` | conditional | — | Entra ID only. Azure AD tenant ID (`az account show --query tenantId -o tsv`). |
 | `multiclouddb.connection.connectionMode` | no | `direct` | Set to `gateway` for the emulator; `direct` works for live accounts. |
 | `multiclouddb.database` | no | `multiclouddb-sdk-for-java-changefeed` | Logical database name. |
 | `multiclouddb.collection` | no | `change-feed-demo` | Container name. |
@@ -748,7 +751,7 @@ Shipped properties files:
 |------|-------------|------------------|
 | `src/main/resources/change-feed-cosmos.properties` | Cosmos emulator | yes |
 | `src/main/resources/change-feed-cosmos-cloud.properties.template` | Cosmos cloud (template — copy and fill in) | yes |
-| `src/main/resources/change-feed-cosmos-cloud.properties` | Cosmos cloud (your real endpoint + key) | **no** (gitignored) |
+| `src/main/resources/change-feed-cosmos-cloud.properties` | Cosmos cloud (your real endpoint + master key **or** Entra ID settings) | **no** (gitignored) |
 
 ---
 
@@ -810,13 +813,30 @@ az cosmosdb show --name "$COSMOS_ACCOUNT" -g "$COSMOS_RG" \
 > `az cosmosdb update --backup-policy-type Continuous`. Note that the switch
 > is **one-way** — you cannot revert to Periodic.
 
-> **Don't need to create the database / container ahead of time** — the
-> samples call `ensureDatabase()` / `ensureContainer()` on startup. On a
-> CB-enabled account a plain container is enough; AVAD is automatic.
+> **Master-key auth — no need to create the database / container ahead of
+> time.** The samples call `ensureDatabase()` / `ensureContainer()` on startup.
+> On a CB-enabled account a plain container is enough; AVAD is automatic.
+>
+> **Entra ID auth — you MUST pre-create the database and container.** With
+> Entra ID (`DefaultAzureCredential`) the SDK is granted only a *data-plane*
+> RBAC role, which cannot perform the control-plane `createDatabaseIfNotExists`
+> that backs `ensureDatabase()` / `ensureContainer()`. The samples detect Entra
+> ID auth and skip those calls, so the database and container must already
+> exist. See [Step 2B](#step-2b--option-b--entra-id--defaultazurecredential)
+> below.
 
 #### Step 2 — Create the properties file
 
 The cloud properties file is **git-ignored** and must never be committed.
+Choose **one** authentication option:
+
+- **Option A — Master Key** (simplest; requires key-based auth to be allowed on
+  the account). Continue with [Step 2A](#step-2a--option-a--master-key).
+- **Option B — Entra ID / `DefaultAzureCredential`** (recommended for
+  production; required when key-based auth is disabled by policy). Continue with
+  [Step 2B](#step-2b--option-b--entra-id--defaultazurecredential).
+
+##### Step 2A — Option A — Master Key
 
 **macOS / Linux:**
 
@@ -872,6 +892,137 @@ cat src/main/resources/change-feed-cosmos-cloud.properties
 > `src/main/resources/change-feed-cosmos-cloud.properties.template` and filling
 > in the placeholders.
 
+> Using Option A? Skip ahead to [Step 3](#step-3--build-and-run).
+
+##### Step 2B — Option B — Entra ID / DefaultAzureCredential
+
+Use this when key-based auth is **disabled by policy** on your subscription. No
+key goes in the file — the SDK authenticates with your Azure identity
+(`az login`, Managed Identity, or environment variables) via
+`DefaultAzureCredential`.
+
+**Step 2B.1 — Sign in and write the properties file** (no `key` line):
+
+**macOS / Linux:**
+
+```bash
+az login
+
+COSMOS_SUBSCRIPTION=$(az account show --query id -o tsv)
+COSMOS_TENANT=$(az account show --query tenantId -o tsv)
+COSMOS_ENDPOINT=$(az cosmosdb show \
+  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
+  --query documentEndpoint -o tsv)
+
+cat > src/main/resources/change-feed-cosmos-cloud.properties << EOF
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.connection.subscriptionId=$COSMOS_SUBSCRIPTION
+multiclouddb.connection.resourceGroupName=$COSMOS_RG
+multiclouddb.connection.tenantId=$COSMOS_TENANT
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+EOF
+```
+
+**Windows (PowerShell):**
+
+```powershell
+az login
+
+$COSMOS_SUBSCRIPTION = (az account show --query id -o tsv)
+$COSMOS_TENANT       = (az account show --query tenantId -o tsv)
+$COSMOS_ENDPOINT     = (az cosmosdb show `
+  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
+  --query documentEndpoint -o tsv)
+
+@"
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.connection.subscriptionId=$COSMOS_SUBSCRIPTION
+multiclouddb.connection.resourceGroupName=$COSMOS_RG
+multiclouddb.connection.tenantId=$COSMOS_TENANT
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+"@ | Set-Content src\main\resources\change-feed-cosmos-cloud.properties
+```
+
+**Step 2B.2 — Assign the data-plane RBAC role to your identity:**
+
+Entra ID requests are rejected unless your identity holds a Cosmos-native
+data-plane role.
+
+**macOS / Linux:**
+
+```bash
+PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv)
+
+az cosmosdb sql role assignment create \
+  --account-name "$COSMOS_ACCOUNT" \
+  --resource-group "$COSMOS_RG" \
+  --role-definition-name "Cosmos DB Built-in Data Contributor" \
+  --scope "/" \
+  --principal-id "$PRINCIPAL_ID"
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$PRINCIPAL_ID = (az ad signed-in-user show --query id -o tsv)
+
+az cosmosdb sql role assignment create `
+  --account-name $COSMOS_ACCOUNT `
+  --resource-group $COSMOS_RG `
+  --role-definition-name "Cosmos DB Built-in Data Contributor" `
+  --scope "/" `
+  --principal-id $PRINCIPAL_ID
+```
+
+**Step 2B.3 — Pre-create the database and container:**
+
+The "Cosmos DB Built-in Data Contributor" role grants **data-plane** access
+only. It cannot run the control-plane `createDatabaseIfNotExists` that backs
+`ensureDatabase()` / `ensureContainer()`, so the samples skip those calls under
+Entra ID and expect the database and container to already exist. Create them
+once via the control plane (ARM):
+
+**macOS / Linux:**
+
+```bash
+az cosmosdb sql database create \
+  --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
+  --name multiclouddb-sdk-for-java-changefeed
+
+az cosmosdb sql container create \
+  --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
+  --database-name multiclouddb-sdk-for-java-changefeed \
+  --name change-feed-demo \
+  --partition-key-path /partitionKey
+```
+
+**Windows (PowerShell):**
+
+```powershell
+az cosmosdb sql database create `
+  --account-name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
+  --name multiclouddb-sdk-for-java-changefeed
+
+az cosmosdb sql container create `
+  --account-name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
+  --database-name multiclouddb-sdk-for-java-changefeed `
+  --name change-feed-demo `
+  --partition-key-path /partitionKey
+```
+
+> The container names above match `multiclouddb.database` /
+> `multiclouddb.collection` in your properties file — keep them in sync if you
+> change either. On a Continuous-Backup account a plain container is enough;
+> AVAD is automatic. The `ChangeFeedExtendedRetentionSample` uses a different
+> database/collection (`multiclouddb_samples` / `retention_demo`) — pre-create
+> those too if you run it with Entra ID.
+
 #### Step 3 — Build and run
 
 `ConfigLoader` reads configs from the **fat-jar classpath**, so the runtime
@@ -909,6 +1060,19 @@ java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
      com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
+> **Always re-run `mvn package` after creating or editing the properties
+> file.** The fat jar bakes in `src/main/resources/` at package time, so a
+> config added *after* the last build won't be on the classpath. A correct run
+> prints `Loaded config: change-feed-cosmos-cloud.properties` near the top. If
+> you instead see `Config file not found … using system properties only` or
+> `IllegalArgumentException: Cosmos connection.endpoint is required`, the file
+> wasn't packaged — recreate it, then run `mvn package` again before `java`.
+
+> **Entra ID note:** `DefaultAzureCredential` probes Managed Identity (IMDS)
+> before falling back to your `az login` token. On a developer machine this
+> logs a benign `Managed Identity … Identity not found` message and then
+> authenticates successfully; the samples' `logback.xml` already silences it.
+
 #### Step 4 — Clean up Cosmos DB resources (optional)
 
 Drop the database (and its single container) when you're done:
@@ -929,6 +1093,20 @@ az cosmosdb delete \
 ---
 
 ## Troubleshooting
+
+### `Request blocked by Auth … cannot be authorized by AAD token in data plane` (403, subStatus 5300)
+
+You're using Entra ID auth but your identity is missing the Cosmos-native
+data-plane role. Assign the **Cosmos DB Built-in Data Contributor** role — see
+[Step 2B.2](#step-2b--option-b--entra-id--defaultazurecredential).
+
+### `NotFound` / `Owner resource does not exist` with Entra ID auth
+
+With Entra ID the samples skip `ensureDatabase()` / `ensureContainer()` (the
+data-plane RBAC role cannot run those control-plane operations), so the database
+and container must already exist. Pre-create them as shown in
+[Step 2B.3](#step-2b--option-b--entra-id--defaultazurecredential), and confirm
+`multiclouddb.database` / `multiclouddb.collection` match the names you created.
 
 ### `BadRequest: The retention duration in the Change Feed policy should not be set when continuous backup mode is enabled`
 

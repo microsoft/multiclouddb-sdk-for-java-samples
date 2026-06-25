@@ -136,8 +136,18 @@ public class ChangeFeedSample {
             // enabled at the account level. On the emulator the container
             // was already created above and this is a no-op verification.
             log.info("--- Provisioning '{}/{}' ---", database, collection);
-            client.ensureDatabase(database);
-            client.ensureContainer(address);
+            if (ChangeFeedSampleSupport.usesEntraId(appConfig)) {
+                // Entra ID is granted only a data-plane RBAC role, so the
+                // control-plane ensureDatabase()/ensureContainer() calls (which
+                // run createDatabaseIfNotExists under the hood) would fail. The
+                // database and container must be pre-created — see
+                // README-change-feed.md → "Cosmos DB Cloud Setup".
+                log.info("  No master key configured — treating as Entra ID mode; skipping "
+                        + "ensureDatabase()/ensureContainer(); expecting pre-created database '{}' and container '{}'.", database, collection);
+            } else {
+                client.ensureDatabase(database);
+                client.ensureContainer(address);
+            }
 
             // === 2. List cursors at the live tip ===
             // No events committed before this call will be surfaced.

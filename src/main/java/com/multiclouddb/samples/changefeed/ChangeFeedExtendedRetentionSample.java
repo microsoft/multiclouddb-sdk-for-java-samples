@@ -249,8 +249,19 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println("--- Provisioning '" + database + "/" + DEFAULT_COLLECTION + "' ---");
         try (MulticloudDbClient provisionClient = MulticloudDbClientFactory.create(
                 appConfig.sdkWithoutExtendedRetention())) {
-            provisionClient.ensureDatabase(database);
-            provisionClient.ensureContainer(address);
+            if (ChangeFeedSampleSupport.usesEntraId(appConfig)) {
+                // Entra ID is granted only a data-plane RBAC role, so the
+                // control-plane ensureDatabase()/ensureContainer() calls (which
+                // run createDatabaseIfNotExists under the hood) would fail. The
+                // database and container must be pre-created — see
+                // README-change-feed.md → "Cosmos DB Cloud Setup".
+                System.out.println("  No master key configured — treating as Entra ID mode; skipping "
+                        + "ensureDatabase()/ensureContainer(); expecting pre-created database '" + database + "' and container '"
+                        + DEFAULT_COLLECTION + "'.");
+            } else {
+                provisionClient.ensureDatabase(database);
+                provisionClient.ensureContainer(address);
+            }
         }
         System.out.println("  Container ready.");
         System.out.println();
