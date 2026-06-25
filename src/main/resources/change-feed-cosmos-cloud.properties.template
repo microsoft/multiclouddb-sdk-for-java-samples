@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
-#  Change Feed Sample — Azure Cosmos DB (LIVE account, master-key auth)
-# ---------------------------------------------------------------------------
+#  Change Feed Sample — Azure Cosmos DB (LIVE account)
+#  -- HOW TO USE -------------------------------------------------------------
 #
 #  Template — copy to `change-feed-cosmos-cloud.properties` (gitignored) and
-#  fill in your endpoint + primary master key:
+#  fill in the values for the authentication option you choose:
 #
 #    cp src/main/resources/change-feed-cosmos-cloud.properties.template \
 #       src/main/resources/change-feed-cosmos-cloud.properties
@@ -13,16 +13,30 @@
 #         -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
 #         com.multiclouddb.samples.changefeed.ChangeFeedSample
 #
-#  REQUIRED: Cosmos account must have Continuous Backup enabled (any tier).
-#  When CB is on, the All-Versions-and-Deletes (AVAD) change feed is available
-#  automatically on every container — the sample creates a plain container and
-#  reads in AVAD mode. Verify with:
-#    az cosmosdb show --name <account> -g <rg> --query backupPolicy.type -o tsv
-#  Expect: Continuous
+#  Two authentication options are supported. Fill in the block you want.
 #
-#  Get connection info:
+#  OPTION A — Master Key (simpler, no az login needed)
+#  -------------------------------------------------------
 #    az cosmosdb show     --name <account> -g <rg> --query documentEndpoint -o tsv
 #    az cosmosdb keys list --name <account> -g <rg> --query primaryMasterKey -o tsv
+#
+#  OPTION B — Entra ID / DefaultAzureCredential (recommended for production)
+#  --------------------------------------------------------------------------
+#  Use this when key-based auth is disabled by policy on your subscription.
+#    1. Run `az login` (or set AZURE_CLIENT_ID / AZURE_CLIENT_SECRET / AZURE_TENANT_ID)
+#    2. Assign the "Cosmos DB Built-in Data Contributor" role to your identity
+#    3. Fill in the ARM properties (subscriptionId, resourceGroupName, tenantId)
+#    4. PRE-CREATE the database and container — with Entra ID the samples can
+#       NOT run ensureDatabase()/ensureContainer() (control-plane operations the
+#       data-plane RBAC role cannot perform). See README-change-feed.md →
+#       "Cosmos DB Cloud Setup" for the exact `az cosmosdb sql database/container
+#       create` commands.
+#
+#  REQUIRED (both options): Cosmos account must have Continuous Backup enabled.
+#  When CB is on, the All-Versions-and-Deletes (AVAD) change feed is available
+#  automatically on every container. Verify with:
+#    az cosmosdb show --name <account> -g <rg> --query backupPolicy.type -o tsv
+#  Expect: Continuous
 # ---------------------------------------------------------------------------
 
 multiclouddb.provider=cosmos
@@ -30,13 +44,38 @@ multiclouddb.provider=cosmos
 # --- Application Settings ---------------------------------------------------
 # Pick names that don't collide with any pre-existing non-AVAD containers —
 # Cosmos cannot retrofit AVAD onto an existing container.
+# With Entra ID (Option B) the database and container below must already exist.
 multiclouddb.database=multiclouddb-sdk-for-java-changefeed
 multiclouddb.collection=change-feed-demo
 
 # --- Azure Cosmos DB (LIVE) -------------------------------------------------
+# Your Cosmos DB account endpoint (required for both options)
 multiclouddb.connection.endpoint=<REPLACE_ME_ENDPOINT>
-multiclouddb.connection.key=<REPLACE_ME_PRIMARY_KEY>
+
+# Use "gateway" for restricted networks / firewalls; "direct" for best performance
 multiclouddb.connection.connectionMode=gateway
+
+# ---------------------------------------------------------------------------
+# OPTION A — Master Key auth  (comment out if using Option B)
+# ---------------------------------------------------------------------------
+# Run: az cosmosdb keys list --name <account> -g <rg> --query primaryMasterKey -o tsv
+multiclouddb.connection.key=<REPLACE_ME_PRIMARY_KEY>
+
+# ---------------------------------------------------------------------------
+# OPTION B — Entra ID auth  (comment out the key above; fill in the ARM
+#            properties below). Leave `multiclouddb.connection.key` UNSET.
+# ---------------------------------------------------------------------------
+# Azure subscription ID that owns the Cosmos DB account
+# Run: az account show --query id -o tsv
+# multiclouddb.connection.subscriptionId=<YOUR-SUBSCRIPTION-ID>
+
+# Resource group containing the Cosmos DB account
+# Run: az resource list --resource-type Microsoft.DocumentDB/databaseAccounts --query "[?name=='<account>'].resourceGroup" -o tsv
+# multiclouddb.connection.resourceGroupName=<YOUR-RESOURCE-GROUP>
+
+# Azure AD tenant ID (prevents InvalidAuthenticationTokenTenant errors)
+# Run: az account show --query tenantId -o tsv
+# multiclouddb.connection.tenantId=<YOUR-TENANT-ID>
 
 # --- Throughput (optional, emulator only) ------------------------------------
 # On the emulator the sample creates the container via the Cosmos SDK. Set
