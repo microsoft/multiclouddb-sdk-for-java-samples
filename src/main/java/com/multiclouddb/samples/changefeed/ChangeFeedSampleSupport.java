@@ -35,18 +35,18 @@ final class ChangeFeedSampleSupport {
     }
 
     /**
-     * Returns {@code true} when the config carries no Cosmos master key, which
-     * means the SDK will authenticate with Microsoft Entra ID via
-     * {@code DefaultAzureCredential} (driven by the
-     * {@code subscriptionId} / {@code resourceGroupName} / {@code tenantId}
-     * connection properties).
+     * Returns {@code true} when the config carries no Cosmos master key. The
+     * samples treat a missing/blank key as <em>Entra ID mode</em> and let the
+     * SDK authenticate with Microsoft Entra ID via {@code DefaultAzureCredential}
+     * (driven by the {@code subscriptionId} / {@code resourceGroupName} /
+     * {@code tenantId} connection properties).
      * <p>
-     * Entra ID is granted only a data-plane RBAC role (e.g. <i>Cosmos DB
-     * Built-in Data Contributor</i>), so control-plane operations such as
-     * {@code ensureDatabase()} / {@code ensureContainer()} (which call
-     * {@code createDatabaseIfNotExists} under the hood) are not permitted. The
-     * samples use this to skip provisioning and rely on a pre-created database
-     * and container instead (see README-change-feed.md).
+     * In Entra ID mode the identity is typically granted only a data-plane RBAC
+     * role (e.g. <i>Cosmos DB Built-in Data Contributor</i>), so control-plane
+     * operations such as {@code ensureDatabase()} / {@code ensureContainer()}
+     * (which call {@code createDatabaseIfNotExists} under the hood) are not
+     * permitted. The samples use this to skip provisioning and rely on a
+     * pre-created database and container instead (see README-change-feed.md).
      */
     static boolean usesEntraId(ConfigLoader.AppConfig appConfig) {
         String key = appConfig.sdk().connection().get("key");

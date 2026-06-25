@@ -255,8 +255,8 @@ public class ChangeFeedExtendedRetentionSample {
                 // run createDatabaseIfNotExists under the hood) would fail. The
                 // database and container must be pre-created — see
                 // README-change-feed.md → "Cosmos DB Cloud Setup".
-                System.out.println("  Entra ID auth detected — skipping ensureDatabase()/ensureContainer(); "
-                        + "expecting pre-created database '" + database + "' and container '"
+                System.out.println("  No master key configured — treating as Entra ID mode; skipping "
+                        + "ensureDatabase()/ensureContainer(); expecting pre-created database '" + database + "' and container '"
                         + DEFAULT_COLLECTION + "'.");
             } else {
                 provisionClient.ensureDatabase(database);

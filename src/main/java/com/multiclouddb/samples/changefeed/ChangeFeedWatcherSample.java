@@ -142,8 +142,8 @@ public class ChangeFeedWatcherSample {
                 // run createDatabaseIfNotExists under the hood) would fail. The
                 // database and container must be pre-created — see
                 // README-change-feed.md → "Cosmos DB Cloud Setup".
-                log.info("  Entra ID auth detected — skipping ensureDatabase()/ensureContainer(); "
-                        + "expecting pre-created database '{}' and container '{}'.", database, collection);
+                log.info("  No master key configured — treating as Entra ID mode; skipping "
+                        + "ensureDatabase()/ensureContainer(); expecting pre-created database '{}' and container '{}'.", database, collection);
             } else {
                 client.ensureDatabase(database);
                 client.ensureContainer(address);
