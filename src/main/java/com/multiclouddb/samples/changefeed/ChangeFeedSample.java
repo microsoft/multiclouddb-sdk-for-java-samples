@@ -31,8 +31,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * primitives: {@code listCursors}, {@code readChanges}, and the opaque
  * cursor-token round-trip.
  * <p>
- * <b>Note:</b> This sample currently supports <b>Azure Cosmos DB only</b>.
- * Other providers will error until they ship change-feed support.
+ * <b>Supported providers:</b> Azure Cosmos DB and Amazon DynamoDB. Spanner
+ * does not yet ship change-feed support and will be rejected by the capability
+ * check below.
  * <p>
  * Usage:
  *
@@ -70,6 +71,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       endpoints and pre-provisions the AVAD container directly via the
  *       Cosmos SDK with a 10-minute {@code ChangeFeedPolicy} (the emulator's
  *       hard ceiling).</li>
+ *   <li><b>DynamoDB (local or AWS)</b> — {@code ensureContainer} creates the
+ *       table but does NOT enable DynamoDB Streams. The sample enables a
+ *       {@code NEW_AND_OLD_IMAGES} stream on the table after creating it, then
+ *       reads the change feed from it. Only changes committed after the stream
+ *       is enabled are surfaced.</li>
  * </ul>
  * This sample uses a dedicated database ({@code multiclouddb-sdk-for-java-changefeed})
  * and container ({@code change-feed-demo}) to avoid conflicting with non-AVAD
@@ -93,17 +99,13 @@ public class ChangeFeedSample {
         log.info("=== Multicloud DB Change Feed Sample ===");
         log.info("Provider: {}", provider.displayName());
 
-        // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
-        if (!ProviderId.COSMOS.equals(provider)) {
-            log.error("Change-feed samples currently support Cosmos DB only.");
-            log.error("Set multiclouddb.provider=cosmos in your config. Other providers will be supported in a future release.");
-            System.exit(1);
-            return;
+        boolean isDynamo = ProviderId.DYNAMO.equals(provider);
+        boolean isCosmosEmulator = ProviderId.COSMOS.equals(provider)
+                && ChangeFeedSampleSupport.isLocalEndpoint(
+                        appConfig.sdk().connection().get("endpoint"));
+        if (ProviderId.COSMOS.equals(provider)) {
+            log.info("Mode    : {}", isCosmosEmulator ? "EMULATOR" : "LIVE");
         }
-
-        boolean isCosmosEmulator = ChangeFeedSampleSupport.isLocalEndpoint(
-                appConfig.sdk().connection().get("endpoint"));
-        log.info("Mode    : {}", isCosmosEmulator ? "EMULATOR" : "LIVE");
 
         String database = appConfig.property("multiclouddb.database", DEFAULT_DATABASE);
         String collection = appConfig.property("multiclouddb.collection", DEFAULT_COLLECTION);
@@ -127,6 +129,7 @@ public class ChangeFeedSample {
             CapabilitySet caps = client.capabilities();
             if (!caps.isSupported(Capability.CHANGE_FEED)) {
                 log.error("Change feed is not supported on {}.", provider.displayName());
+                log.error("Supported providers: Cosmos DB, DynamoDB. Set multiclouddb.provider accordingly.");
                 return;
             }
 
@@ -138,6 +141,13 @@ public class ChangeFeedSample {
             log.info("--- Provisioning '{}/{}' ---", database, collection);
             client.ensureDatabase(database);
             client.ensureContainer(address);
+
+            // DynamoDB: ensureContainer creates the table but does not enable
+            // DynamoDB Streams. Enable a NEW_AND_OLD_IMAGES stream now so the
+            // change feed has a source to read from.
+            if (isDynamo) {
+                ChangeFeedSampleSupport.enableDynamoStream(appConfig, database, collection);
+            }
 
             // === 2. List cursors at the live tip ===
             // No events committed before this call will be surfaced.
@@ -226,9 +236,9 @@ public class ChangeFeedSample {
             Thread.sleep(200);
 
             // One DELETE to demonstrate the DELETE event type. DELETE events
-            // require AVAD on Cosmos, which is enabled here either by the
-            // emulator pre-provisioning above (Cosmos emulator path) or
-            // implicitly via Continuous Backup (live Cosmos path).
+            // require AVAD on Cosmos (enabled here via the emulator
+            // pre-provisioning above or implicitly via Continuous Backup) and
+            // a NEW_AND_OLD_IMAGES stream on DynamoDB (enabled above).
             client.delete(address, first);
             log.info("  [writer] delete cf-1");
         } catch (InterruptedException ie) {

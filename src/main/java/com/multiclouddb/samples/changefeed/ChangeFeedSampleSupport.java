@@ -16,16 +16,29 @@ import com.azure.cosmos.models.ThroughputProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClientBuilder;
+import software.amazon.awssdk.services.dynamodb.model.StreamSpecification;
+import software.amazon.awssdk.services.dynamodb.model.StreamViewType;
+import software.amazon.awssdk.services.dynamodb.model.TableDescription;
+import software.amazon.awssdk.services.dynamodb.model.TableStatus;
+
 import java.net.URI;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * Helpers shared by the change-feed samples ({@link ChangeFeedSample},
  * {@link ChangeFeedWatcherSample}, and {@link ChangeFeedExtendedRetentionSample}).
  * <p>
- * Currently only Azure Cosmos DB is supported. The helper pre-provisions an
- * AVAD container with an explicit {@link ChangeFeedPolicy} on the local
- * emulator (which does not support Continuous Backup).
+ * For Azure Cosmos DB the helper pre-provisions an AVAD container with an
+ * explicit {@link ChangeFeedPolicy} on the local emulator (which does not
+ * support Continuous Backup). For Amazon DynamoDB the helper enables a
+ * DynamoDB Stream (NEW_AND_OLD_IMAGES) on the table, which the SDK's
+ * {@code ensureContainer} does not turn on by default.
  */
 final class ChangeFeedSampleSupport {
 
@@ -101,5 +114,124 @@ final class ChangeFeedSampleSupport {
                         database, collection);
             }
         }
+    }
+
+    /** DynamoDB composes the table name as {@code database__collection}. */
+    private static final String DYNAMO_TABLE_NAME_SEPARATOR = "__";
+
+    /**
+     * Enable a DynamoDB Stream on the table backing {@code database/collection}
+     * so the change feed has a source to read from.
+     * <p>
+     * The SDK's portable {@code ensureContainer} creates the table but does
+     * <b>not</b> enable streams, so {@code listCursors}/{@code readChanges}
+     * would otherwise fail with {@code UNSUPPORTED_CAPABILITY(stream_not_enabled)}.
+     * This helper turns on a {@link StreamViewType#NEW_AND_OLD_IMAGES} stream
+     * (required so DELETE events carry the old image) and waits up to 60
+     * seconds for the table to become ACTIVE with a stream ARN (logging a
+     * warning if it does not within that window). It is idempotent: if the
+     * stream is already enabled with the right view type, it skips the update
+     * and only waits for the stream ARN to appear.
+     * <p>
+     * Call this <b>after</b> {@code ensureContainer} (the table must exist).
+     * Only events committed <b>after</b> the stream is enabled are surfaced.
+     */
+    static void enableDynamoStream(ConfigLoader.AppConfig appConfig,
+                                   String database,
+                                   String collection) {
+        String tableName = database + DYNAMO_TABLE_NAME_SEPARATOR + collection;
+        try (DynamoDbClient ddb = buildDynamoClient(appConfig)) {
+            TableDescription table = ddb.describeTable(b -> b.tableName(tableName)).table();
+            StreamSpecification spec = table.streamSpecification();
+            boolean streamConfigured = spec != null
+                    && Boolean.TRUE.equals(spec.streamEnabled())
+                    && spec.streamViewType() == StreamViewType.NEW_AND_OLD_IMAGES;
+
+            if (streamConfigured && table.latestStreamArn() != null) {
+                log.info("  [provision] DynamoDB Stream already enabled on '{}' (NEW_AND_OLD_IMAGES).",
+                        tableName);
+                return;
+            }
+
+            if (streamConfigured) {
+                // The stream is already requested with the right view type but the ARN
+                // hasn't populated yet (enablement still in progress). Skip updateTable
+                // to avoid ResourceInUseException and just wait for it to become active.
+                log.info("  [provision] DynamoDB Stream on '{}' is still enabling (NEW_AND_OLD_IMAGES); "
+                        + "waiting for it to become active.", tableName);
+            } else {
+                ddb.updateTable(b -> b.tableName(tableName)
+                        .streamSpecification(s -> s.streamEnabled(true)
+                                .streamViewType(StreamViewType.NEW_AND_OLD_IMAGES)));
+            }
+
+            if (waitForTableStreamActive(ddb, tableName)) {
+                log.info("  [provision] Enabled DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES). "
+                        + "Only changes committed after this point are surfaced.", tableName);
+            } else {
+                log.warn("  [provision] Requested DynamoDB Stream on '{}' (NEW_AND_OLD_IMAGES) but it "
+                        + "is not ACTIVE yet; subsequent change-feed reads may fail until it is.", tableName);
+            }
+        }
+    }
+
+    /**
+     * Poll until the table is {@link TableStatus#ACTIVE} with a stream ARN.
+     *
+     * @return {@code true} if the stream became active before the timeout,
+     *         {@code false} if it timed out or the thread was interrupted.
+     */
+    private static boolean waitForTableStreamActive(DynamoDbClient ddb, String tableName) {
+        long deadline = System.currentTimeMillis() + 60_000L;
+        while (System.currentTimeMillis() < deadline) {
+            TableDescription table = ddb.describeTable(b -> b.tableName(tableName)).table();
+            if (table.tableStatus() == TableStatus.ACTIVE && table.latestStreamArn() != null) {
+                return true;
+            }
+            try {
+                Thread.sleep(500L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static DynamoDbClient buildDynamoClient(ConfigLoader.AppConfig appConfig) {
+        Map<String, String> connection = appConfig.sdk().connection();
+        Map<String, String> auth = appConfig.sdk().auth();
+
+        DynamoDbClientBuilder builder = DynamoDbClient.builder()
+                .region(Region.of(resolveRegion(connection)));
+
+        String endpoint = connection.get("endpoint");
+        if (endpoint != null && !endpoint.isBlank()) {
+            builder.endpointOverride(URI.create(endpoint));
+        }
+
+        String accessKeyId = auth.get("accessKeyId");
+        String secretAccessKey = auth.get("secretAccessKey");
+        if (accessKeyId != null && !accessKeyId.isBlank()
+                && secretAccessKey != null && !secretAccessKey.isBlank()) {
+            builder.credentialsProvider(StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(accessKeyId, secretAccessKey)));
+        }
+        // Otherwise fall back to the default AWS credential provider chain
+        // (env vars, system properties, ~/.aws/credentials, IAM roles, SSO).
+
+        return builder.build();
+    }
+
+    private static String resolveRegion(Map<String, String> connection) {
+        String region = connection.getOrDefault("region", "us-east-1");
+        region = region == null ? "" : region.trim();
+        if (region.isEmpty() || region.startsWith("<")) {
+            throw new IllegalStateException(
+                    "Invalid AWS region '" + region + "'. Set 'multiclouddb.connection.region' in "
+                    + "your properties file to a valid region (e.g., us-east-1) before running "
+                    + "against AWS DynamoDB.");
+        }
+        return region;
     }
 }

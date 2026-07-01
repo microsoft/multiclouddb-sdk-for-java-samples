@@ -1,28 +1,30 @@
 # Multicloud DB SDK — Change Feed Samples
 
 Command-line samples that demonstrate the Multicloud DB SDK's **pull-mode
-change feed** on Azure Cosmos DB.
+change feed** on Azure Cosmos DB and Amazon DynamoDB.
 
-> ⚠️ **Cosmos DB only (temporary):** These samples require SDK `0.1.0-beta.2`
-> and the Cosmos DB change-feed provider. DynamoDB and Spanner do not yet
-> implement change feed — pointing these samples at a non-Cosmos config will
-> exit immediately with an error. This note will be removed once the remaining
-> providers ship change-feed support.
+> ℹ️ **Provider support:** These samples require SDK `0.1.0-beta.2`. The
+> one-shot (`ChangeFeedSample`) and continuous (`ChangeFeedWatcherSample`)
+> samples run on **Cosmos DB** and **DynamoDB**. Spanner does not yet implement
+> change feed — pointing those samples at a Spanner config exits with an error.
+> Extended retention (`ChangeFeedExtendedRetentionSample`) is **Cosmos-only**
+> because DynamoDB Streams are fixed at 24h server-side.
 
 ## Samples
 
-| Sample | Description |
-|--------|-------------|
-| **`ChangeFeedSample`** (one-shot) | ✅ Supported |
-| **`ChangeFeedWatcherSample`** (continuous) | ✅ Supported |
-| **`ChangeFeedExtendedRetentionSample`** (extended retention) | ✅ Supported |
+| Sample | Cosmos DB | DynamoDB | Spanner |
+|--------|-----------|----------|---------|
+| **`ChangeFeedSample`** (one-shot) | ✅ `0.1.0-beta.2` | ✅ `0.1.0-beta.2` | ❌ Not yet supported |
+| **`ChangeFeedWatcherSample`** (continuous) | ✅ `0.1.0-beta.2` | ✅ `0.1.0-beta.2` | ❌ Not yet supported |
+| **`ChangeFeedExtendedRetentionSample`** (extended retention) | ✅ `0.1.0-beta.2` | ❌ Not supported (Streams fixed at 24h) | ❌ Not yet supported |
 
-> **Provider-specific prerequisites (Cosmos DB).**
+> **Provider-specific prerequisites.**
 >
 > | Environment | Prerequisite |
 > |-------------|-------------|
 > | **Cosmos DB (live)** | Account must have **Continuous Backup** enabled (AVAD is then automatic on every container). |
 > | **Cosmos DB (emulator)** | The sample auto-provisions an AVAD container with a 10-min retention policy (no manual setup). |
+> | **DynamoDB (local or AWS)** | The sample enables a `NEW_AND_OLD_IMAGES` DynamoDB Stream on the table after `ensureContainer` (the SDK does not enable streams by default). Only changes after the stream is enabled are surfaced. |
 >
 > Without the prerequisite, `listCursors` / `readChanges` will surface a
 > portable `UNSUPPORTED_CAPABILITY(stream_not_enabled)` error.
@@ -33,7 +35,7 @@ change feed** on Azure Cosmos DB.
 |--------|----------|------------|
 | **`ChangeFeedSample`** | One-shot demo: writer thread produces a fixed `CREATE` / `UPDATE` / `DELETE` sequence; consumer drains the feed; both exit. | Validating that change feed is wired up end-to-end. |
 | **`ChangeFeedWatcherSample`** | Long-running consumer with **no writes of its own**. Polls the change feed and prints each event as it arrives. `Ctrl+C` → final tally. | Observing changes you make manually in the Azure Portal Data Explorer (or any other writer). |
-| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos (which declares `Capability.EXTENDED_CHANGE_FEED_HISTORY`). | Verifying that the provider can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
+| **`ChangeFeedExtendedRetentionSample`** | Opts into `ChangeFeedConfig.extendedRetention(Duration.ofDays(7))` and attempts to build a client. Succeeds on Cosmos (which declares `Capability.EXTENDED_CHANGE_FEED_HISTORY`); DynamoDB declares this unsupported (Streams are fixed at 24h). | Verifying that the provider can be asked for longer-than-24-hour change-feed history before you write any cursor-persistence code. |
 
 The first two samples target the dedicated database/container
 `multiclouddb-sdk-for-java-changefeed/change-feed-demo` (configurable via
@@ -52,6 +54,7 @@ the Todo App or Risk Platform samples.
 | Provider | Emulator / Local config (shipped) | Cloud config (template → copy + fill in) |
 |----------|-----------------------------------|------------------------------------------|
 | **Cosmos DB** | `change-feed-cosmos.properties` | `change-feed-cosmos-cloud.properties.template` |
+| **DynamoDB** | `change-feed-dynamo.properties` | `change-feed-dynamo-cloud.properties.template` |
 
 > Emulator/local configs work out of the box for the extended-retention
 > sample (no credentials needed — the gate runs before any wire I/O).
@@ -63,26 +66,27 @@ the Todo App or Risk Platform samples.
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Provisioning Model — Why Continuous Backup Matters](#provisioning-model--why-continuous-backup-matters)
-3. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
-4. [Emulator Setup](#emulator-setup)
+2. [Emulator Setup](#emulator-setup)
    - [Cosmos DB Emulator](#cosmos-db-emulator)
-5. [Running the Samples](#running-the-samples)
+   - [DynamoDB Local](#dynamodb-local)
+3. [Cloud Setup](#cloud-setup)
+   - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
+   - [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
+4. [Running the Samples](#running-the-samples)
    - [Build the fat jar](#build-the-fat-jar)
    - [Against the Cosmos DB Emulator](#run-against-the-cosmos-db-emulator)
+   - [Against DynamoDB Local](#run-against-dynamodb-local)
    - [Against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud)
+   - [Against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud)
    - [Tuning the watcher poll interval](#tuning-the-watcher-poll-interval)
-6. [Example Output](#example-output)
-   - [`ChangeFeedSample` (one-shot)](#changefeedsample-one-shot)
-   - [`ChangeFeedWatcherSample` (continuous)](#changefeedwatchersample-continuous)
-7. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
+5. [Extended Retention Escape Hatch](#extended-retention-escape-hatch)
    - [Per-provider behaviour](#per-provider-behaviour)
    - [Running `ChangeFeedExtendedRetentionSample`](#running-changefeedextendedretentionsample)
-   - [Example output](#example-output-changefeedextendedretentionsample)
+   - [Example output](#example-output)
+6. [Provisioning Model — Why Continuous Backup Matters](#provisioning-model--why-continuous-backup-matters)
+7. [Multiple Partitions — Seeing 3+ Cursors](#multiple-partitions--seeing-3-cursors)
 8. [Configuration Reference](#configuration-reference)
-9. [Cloud Setup](#cloud-setup)
-   - [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
-10. [Troubleshooting](#troubleshooting)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -93,7 +97,15 @@ the Todo App or Risk Platform samples.
 | JDK  | 17 LTS  | Required — e.g. [Eclipse Adoptium](https://adoptium.net/) |
 | Maven | 3.9+   | Build tool |
 | Azure Cosmos DB Emulator **or** an Azure Cosmos DB account | latest | For Cosmos samples; live accounts must have Continuous Backup enabled (see below) |
+| DynamoDB Local **or** an AWS account | latest | For DynamoDB samples; the sample auto-enables a DynamoDB Stream on the table |
 | Azure CLI | optional | Only needed if you provision the live Cosmos account from the command line |
+
+> **Azure Cosmos SDK version:** the Cosmos change-feed samples read in **All
+> Versions and Deletes (AVAD)** mode, which requires the
+> [`azure-cosmos`](https://mvnrepository.com/artifact/com.azure/azure-cosmos)
+> Java SDK **≥ 4.81.0** for the change-feed pull model. This repo pins a
+> compatible version (`azure-cosmos.version` in `pom.xml`); do not downgrade it
+> below 4.81.0 or AVAD reads will fail (see [Troubleshooting](#troubleshooting)).
 
 Make sure `JAVA_HOME` points to JDK 17 and is on your `PATH`:
 
@@ -111,6 +123,831 @@ java -version   # should say 17.x
 
 ---
 
+## Emulator Setup
+
+All three samples work against emulators / local endpoints. The data-plane
+samples (`ChangeFeedSample`, `ChangeFeedWatcherSample`) require the
+provider-specific change-feed prerequisite to be met (see the Provider
+Support Matrix above). `ChangeFeedExtendedRetentionSample` exercises the
+build-time capability gate and works before any wire I/O — so it works
+even if the emulator isn't running.
+
+### Cosmos DB Emulator
+
+The Cosmos DB emulator provides a free local instance of Azure Cosmos DB for
+development and testing.
+
+#### 1. Install and start
+
+Pick the path for your platform — **Windows native** or **Docker**.
+
+##### Windows (native installer)
+
+Download and run the MSI installer from:\
+<https://learn.microsoft.com/en-us/azure/cosmos-db/emulator#install-the-emulator>
+
+Then launch **Azure Cosmos DB Emulator** from the Start Menu (or system tray).
+It starts on **<https://localhost:8081>** by default.
+
+##### Linux / macOS / Windows (Docker)
+
+Pull the image:
+
+```bash
+docker pull mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+```
+
+Start the emulator (runs on **<https://localhost:8081>**):
+
+```bash
+docker run -p 8081:8081 -p 10250-10255:10250-10255 mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+```
+
+#### 2. Open the Data Explorer
+
+Once the emulator is running (either path above), open the Data Explorer in
+your browser:\
+<https://localhost:8081/_explorer/index.html>
+
+#### 3. No manual database / container needed
+
+Unlike the Todo App sample, you do **not** need to pre-create the database or
+container in Data Explorer. The samples call `ensureDatabase()` /
+`ensureContainer()` (with an explicit AVAD `ChangeFeedPolicy` for the emulator)
+on startup, so a fresh emulator works out of the box.
+
+#### 4. Emulator connection details (already in `change-feed-cosmos.properties`)
+
+| Property | Value |
+|----------|-------|
+| Endpoint | `https://localhost:8081` |
+| Key      | `C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==` (well-known emulator key) |
+| Connection mode | `gateway` (required for emulator) |
+| Database | `multiclouddb-sdk-for-java-changefeed` |
+| Container | `change-feed-demo` |
+
+#### 5. SSL certificate trust
+
+The emulator uses a self-signed TLS certificate. If you see SSL errors, import
+the emulator certificate into your JDK truststore (see the
+[Todo App README](README-todo-app.md#5-ssl-certificate-trust) for a detailed
+walk-through that applies here too).
+
+### DynamoDB Local
+
+[DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
+is a downloadable build of DynamoDB (including DynamoDB Streams) for offline
+development.
+
+#### 1. Start DynamoDB Local
+
+```bash
+docker run -p 8000:8000 amazon/dynamodb-local
+```
+
+#### 2. No manual table needed
+
+The samples call `ensureContainer()` (which creates the
+`local__change-feed-demo` table) and then enable a `NEW_AND_OLD_IMAGES`
+DynamoDB Stream on it automatically — so a fresh DynamoDB Local works out of
+the box.
+
+#### 3. Connection details (already in `change-feed-dynamo.properties`)
+
+| Property | Value |
+|----------|-------|
+| Endpoint | `http://localhost:8000` |
+| Region   | `us-east-1` |
+| Credentials | `fakeMyKeyId` / `fakeSecretAccessKey` (DynamoDB Local accepts any) |
+| Database (table prefix) | `local` |
+| Collection (table suffix) | `change-feed-demo` |
+
+> DynamoDB composes the table name as `<database>__<collection>`, so the demo
+> table is `local__change-feed-demo`.
+
+---
+
+## Cloud Setup
+
+### Cosmos DB Cloud Setup
+
+> Run these steps **in order** in the same terminal. Variables set in one step
+> carry forward to the next — do not close the terminal between steps.
+
+#### Step 1 — Create a Continuous-Backup Cosmos account
+
+The change-feed samples require Continuous Backup to be enabled on the target
+Cosmos account so the AVAD change feed is available without additional
+per-container configuration.
+
+First set a few variables — this is the only OS-specific part:
+
+**macOS / Linux:**
+
+```bash
+COSMOS_ACCOUNT=<your-account-name>
+COSMOS_RG=<your-resource-group>
+COSMOS_LOCATION=westus2
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$COSMOS_ACCOUNT = '<your-account-name>'
+$COSMOS_RG      = '<your-resource-group>'
+$COSMOS_LOCATION = 'westus2'
+```
+
+Then create the CB-enabled account (the same command runs in every shell; tier
+doesn't matter, standard suffices):
+
+```bash
+az cosmosdb create --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --locations regionName="$COSMOS_LOCATION" --backup-policy-type Continuous --continuous-tier Continuous7Days
+```
+
+Verify CB is enabled:
+
+```bash
+az cosmosdb show --name "$COSMOS_ACCOUNT" -g "$COSMOS_RG" --query backupPolicy.type -o tsv
+# Expected output: Continuous
+```
+
+> **Already have a Cosmos account on Periodic backup?** You can switch an
+> existing account to Continuous Backup with
+> `az cosmosdb update --backup-policy-type Continuous`. Note that the switch
+> is **one-way** — you cannot revert to Periodic.
+
+> **Don't need to create the database / container ahead of time** — the
+> samples call `ensureDatabase()` / `ensureContainer()` on startup. On a
+> CB-enabled account a plain container is enough; AVAD is automatic.
+
+#### Step 2 — Create the properties file
+
+The cloud properties file is **git-ignored** and must never be committed.
+
+**macOS / Linux:**
+
+```bash
+COSMOS_ENDPOINT=$(az cosmosdb show --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --query documentEndpoint -o tsv)
+
+COSMOS_KEY=$(az cosmosdb keys list --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --query primaryMasterKey -o tsv)
+
+cat > src/main/resources/change-feed-cosmos-cloud.properties << EOF
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
+multiclouddb.connection.key=$COSMOS_KEY
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+EOF
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$COSMOS_ENDPOINT = (az cosmosdb show --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG --query documentEndpoint -o tsv)
+
+$COSMOS_KEY = (az cosmosdb keys list --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG --query primaryMasterKey -o tsv)
+
+@"
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
+multiclouddb.connection.key=$COSMOS_KEY
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.collection=change-feed-demo
+"@ | Set-Content src\main\resources\change-feed-cosmos-cloud.properties
+```
+
+Verify:
+
+```bash
+cat src/main/resources/change-feed-cosmos-cloud.properties
+```
+
+> **Don't have the Azure CLI?** Get endpoint and key from the
+> [Azure Portal](https://portal.azure.com) → your Cosmos DB account → **Keys**,
+> then create the file manually by copying
+> `src/main/resources/change-feed-cosmos-cloud.properties.template` and filling
+> in the placeholders.
+
+Setup is complete. To build, run, and later clean up, see
+[Run against Cosmos DB (Azure Cloud)](#run-against-cosmos-db-azure-cloud) under
+**Running the Samples**.
+
+### DynamoDB Cloud Setup
+
+> Run against a real AWS account. The sample creates the table and enables a
+> `NEW_AND_OLD_IMAGES` DynamoDB Stream automatically — you do not need to create
+> the table or stream by hand.
+
+#### Step 1 — Configure AWS credentials
+
+The SDK and the sample's stream-provisioning helper both use the default AWS
+credential provider chain. Make sure credentials resolve and the identity is
+valid before running.
+
+Configure credentials (or use `aws sso login`):
+
+```bash
+aws configure
+```
+
+Verify the identity resolves (must succeed, no `InvalidClientTokenId`):
+
+```bash
+aws sts get-caller-identity
+```
+
+The principal needs `dynamodb:CreateTable`, `DescribeTable`, `UpdateTable`,
+`PutItem` / `UpdateItem` / `DeleteItem`, plus the Streams actions
+`DescribeStream`, `GetShardIterator`, and `GetRecords`.
+
+#### Step 2 — Create the cloud properties file
+
+```bash
+cp src/main/resources/change-feed-dynamo-cloud.properties.template src/main/resources/change-feed-dynamo-cloud.properties
+# edit it and set your region, e.g.:
+#   multiclouddb.connection.region=us-east-1
+# leave multiclouddb.connection.endpoint unset to hit the real AWS service
+```
+
+Setup is complete. To build, run, and later clean up, see
+[Run against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud) under
+**Running the Samples**.
+
+---
+
+## Running the Samples
+
+> **PowerShell users:** always wrap `-D...` JVM arguments in quotes, e.g.
+> `java "-Dmulticlouddb.config=change-feed-dynamo.properties" -cp ...`.
+> Without quotes, PowerShell splits the token and Java fails with
+> `Could not find or load main class .config=...`. The quotes are harmless on
+> bash/zsh, so the quoted form below works on every shell.
+
+### Build the fat jar
+
+The samples are launched as plain `java -cp <jar> <MainClass>` invocations, so
+build the assembled jar once:
+
+```bash
+mvn package -DskipTests
+```
+
+This produces `target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar`,
+which contains the samples plus every runtime dependency.
+
+> **Why not `mvn exec:java`?** The `exec-maven-plugin` in `pom.xml` is pinned to
+> `mainClass=com.multiclouddb.samples.PortableCrudQuerySample` and overriding
+> it via `-Dexec.mainClass=...` does not always take effect on PowerShell. The
+> fat-jar path is uniformly reliable across shells.
+
+### Run against the Cosmos DB Emulator
+
+The default config (`change-feed-cosmos.properties`) targets the emulator and
+is loaded automatically when no `-Dmulticlouddb.config` is supplied.
+
+**One-shot demo:**
+
+```bash
+java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Sample ===
+Provider: Azure Cosmos DB
+Mode    : EMULATOR
+
+--- Provisioning 'multiclouddb-sdk-for-java-changefeed/change-feed-demo' ---
+
+--- listCursors (live tip) ---
+  Discovered 1 partition cursor(s)
+  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
+
+--- readChanges (consuming events) ---
+  [writer] upsert cf-1
+  [writer] upsert cf-2
+  [writer] upsert cf-3
+  [writer] upsert cf-4
+  [writer] upsert cf-5
+  [writer] upsert cf-6
+  [writer] update cf-1
+  [writer] delete cf-1
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+
+  Total events observed: 8
+
+--- Cursor token round-trip ---
+  Persisted token (truncated): {"continuation":"\"...\"","partitionKey":...
+  Resumed cursor read 0 new events (expected — no further writes)
+
+=== Sample complete ===
+```
+
+**Continuous watcher:**
+
+```bash
+java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Then open <https://localhost:8081/_explorer/index.html>, navigate to the
+`multiclouddb-sdk-for-java-changefeed → change-feed-demo` container, and
+add / edit / delete items — each operation prints a line in the watcher
+terminal.
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Watcher ===
+Provider     : Azure Cosmos DB
+Mode         : EMULATOR
+Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
+Poll interval: 1000 ms
+
+Discovered 1 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
+
+Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo — go add/update/delete items (e.g., in the Azure Portal Data Explorer).
+Press Ctrl+C to stop.
+
+[2026-06-12T19:40:55Z] cursor-0  CREATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello", ...}
+[2026-06-12T19:40:57Z] cursor-0  UPDATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello (edited)", ...}
+[2026-06-12T19:40:58Z] cursor-0  DELETE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {}
+
+^C
+--- Stopping watcher ---
+Total events observed: 3
+```
+
+### Run against DynamoDB Local
+
+Point `-Dmulticlouddb.config` at `change-feed-dynamo.properties`. The samples
+create the table and enable a `NEW_AND_OLD_IMAGES` stream automatically.
+
+**One-shot demo:**
+
+```bash
+java "-Dmulticlouddb.config=change-feed-dynamo.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Sample ===
+Provider: AWS DynamoDB
+--- Provisioning 'local/change-feed-demo' ---
+  [provision] Enabled DynamoDB Stream on 'local__change-feed-demo' (NEW_AND_OLD_IMAGES). Only changes committed after this point are surfaced.
+--- listCursors (live tip) ---
+  Discovered 1 partition cursor(s)
+  cursor-0: eyJ2IjoxLCJwIjoiZHluYW1vIiwiciI6ImxvY2FsL2NoYW5nZS1mZWVkLWRlbW8iLCJpIjoxNzgyMjU4…
+--- readChanges (consuming events) ---
+  Started 1 parallel consumer thread(s).
+  [writer] upsert cf-1
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-23T23:40:00Z
+  [writer] upsert cf-2
+  [writer] upsert cf-3
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-23T23:40:00Z
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-23T23:40:00Z
+  [writer] upsert cf-4
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-23T23:40:00Z
+  [writer] upsert cf-5
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-23T23:40:00Z
+  [writer] upsert cf-6
+  [cursor-0] CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-23T23:40:00Z
+  [writer] update cf-1
+  [writer] delete cf-1
+  [cursor-0] UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-23T23:40:00Z
+  [cursor-0] DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-23T23:40:00Z
+  Total events observed: 8
+--- Cursor token round-trip ---
+  Persisted token (truncated): eyJ2IjoxLCJwIjoiZHluYW1vIiwiciI6ImxvY2FsL2NoYW5nZS1mZWVkLWRl…
+  Resumed cursor read 0 event(s); hasMore=false, terminal=false
+=== Sample complete ===
+```
+
+> **Note:** the number of events observed and the exact interleaving of
+> `[writer]` / `[cursor-0]` lines vary between runs — the consumer starts at the
+> live stream tip, so writes that land before it attaches may not all be
+> surfaced in a single short run.
+
+**Continuous watcher:**
+
+```bash
+java "-Dmulticlouddb.config=change-feed-dynamo.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Then write to the `local__change-feed-demo` table (e.g. with the
+`aws dynamodb put-item --endpoint-url http://localhost:8000` CLI) — each
+operation prints a line in the watcher terminal. To run against a live AWS
+account instead, see
+[Run against DynamoDB (AWS Cloud)](#run-against-dynamodb-aws-cloud) below.
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Watcher ===
+Provider     : AWS DynamoDB
+Container    : local/change-feed-demo
+Poll interval: 1000 ms
+
+Discovered 1 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIjoiRHluYW1vIiwic2hhcmRJZCI6…
+
+Watching local/change-feed-demo — go put/update/delete items (e.g., with the AWS CLI against http://localhost:8000).
+Press Ctrl+C to stop.
+
+[2026-06-12T19:40:55Z] cursor-0  CREATE MulticloudDbKey{partitionKey=item-1, sortKey=item-1}  {"id":"item-1","title":"hello", ...}
+[2026-06-12T19:40:57Z] cursor-0  UPDATE MulticloudDbKey{partitionKey=item-1, sortKey=item-1}  {"id":"item-1","title":"hello (edited)", ...}
+[2026-06-12T19:40:58Z] cursor-0  DELETE MulticloudDbKey{partitionKey=item-1, sortKey=item-1}  {}
+
+^C
+--- Stopping watcher ---
+Total events observed: 3
+```
+
+### Run against Cosmos DB (Azure Cloud)
+
+> **First time?** Complete the [Cosmos DB Cloud Setup](#cosmos-db-cloud-setup)
+> below to create your properties file and provision a CB-enabled Cosmos DB
+> account.
+
+`ConfigLoader` reads configs from the fat-jar classpath, so the runtime file
+must live under `src/main/resources/` **before** you run `mvn package`. After
+the one-time properties-file copy you can re-use the resulting fat jar for both
+samples.
+
+Build the fat jar:
+
+```bash
+mvn package -DskipTests
+```
+
+One-shot demo:
+
+```bash
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Sample ===
+Provider: Azure Cosmos DB
+Mode    : LIVE
+
+--- Provisioning 'multiclouddb-sdk-for-java-changefeed/change-feed-demo' ---
+
+--- listCursors (live tip) ---
+  Discovered 1 partition cursor(s)
+  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
+
+--- readChanges (consuming events) ---
+  [writer] upsert cf-1
+  [writer] upsert cf-2
+  [writer] upsert cf-3
+  [writer] upsert cf-4
+  [writer] upsert cf-5
+  [writer] upsert cf-6
+  [writer] update cf-1
+  [writer] delete cf-1
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+
+  Total events observed: 8
+
+--- Cursor token round-trip ---
+  Persisted token (truncated): {"continuation":"\"...\"","partitionKey":...
+  Resumed cursor read 0 new events (expected — no further writes)
+
+=== Sample complete ===
+```
+
+Continuous watcher:
+
+```bash
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Watcher ===
+Provider     : Azure Cosmos DB
+Mode         : LIVE
+Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
+Poll interval: 1000 ms
+
+Discovered 1 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
+
+Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo — go add/update/delete items (e.g., in the Azure Portal Data Explorer).
+Press Ctrl+C to stop.
+
+[2026-06-12T19:40:55Z] cursor-0  CREATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello", ...}
+[2026-06-12T19:40:57Z] cursor-0  UPDATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello (edited)", ...}
+[2026-06-12T19:40:58Z] cursor-0  DELETE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {}
+
+^C
+--- Stopping watcher ---
+Total events observed: 3
+```
+
+#### Clean up Cosmos DB resources (optional)
+
+Drop the database (and its single container) when you're done:
+
+```bash
+az cosmosdb sql database delete --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --name multiclouddb-sdk-for-java-changefeed --yes
+```
+
+Or delete the entire Cosmos account:
+
+```bash
+az cosmosdb delete --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --yes
+```
+
+### Run against DynamoDB (AWS Cloud)
+
+> **First time?** Complete the [DynamoDB Cloud Setup](#dynamodb-cloud-setup)
+> below to configure AWS credentials and create your properties file.
+
+Same flow as DynamoDB Local, but point `-Dmulticlouddb.config` at the cloud
+config. Credentials come from the default AWS provider chain (run
+`aws sts get-caller-identity` to confirm they resolve). `ConfigLoader` reads
+configs from the fat-jar classpath, so the runtime file must live under
+`src/main/resources/` **before** you run `mvn package`.
+
+Build the fat jar:
+
+```bash
+mvn package -DskipTests
+```
+
+One-shot demo:
+
+```bash
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedSample
+```
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Sample ===
+Provider: AWS DynamoDB
+
+--- Provisioning 'multiclouddb-sdk-for-java-changefeed/change-feed-demo' ---
+
+--- listCursors (live tip) ---
+  Discovered 1 partition cursor(s)
+  cursor-0: eyJ0eXBlIjoiRHluYW1vIiwic2hhcmRJZCI6…
+
+--- readChanges (consuming events) ---
+  [writer] upsert cf-1
+  [writer] upsert cf-2
+  [writer] upsert cf-3
+  [writer] upsert cf-4
+  [writer] upsert cf-5
+  [writer] upsert cf-6
+  [writer] update cf-1
+  [writer] delete cf-1
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+  [consumer] cursor-0  DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
+
+  Total events observed: 8
+
+--- Cursor token round-trip ---
+  Persisted token (truncated): {"shardId":"shardId-00000001...","sequenceNumber":...
+  Resumed cursor read 0 new events (expected — no further writes)
+
+=== Sample complete ===
+```
+
+Continuous watcher:
+
+```bash
+java "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+Example output:
+
+```
+=== Multicloud DB Change Feed Watcher ===
+Provider     : AWS DynamoDB
+Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
+Poll interval: 1000 ms
+
+Discovered 1 partition cursor(s) at the live tip.
+  cursor-0: eyJ0eXBlIjoiRHluYW1vIiwic2hhcmRJZCI6…
+
+Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo — go put/update/delete items (e.g., with the AWS CLI or SDK).
+Press Ctrl+C to stop.
+
+[2026-06-12T19:40:55Z] cursor-0  CREATE MulticloudDbKey{partitionKey=item-1, sortKey=item-1}  {"id":"item-1","title":"hello", ...}
+[2026-06-12T19:40:57Z] cursor-0  UPDATE MulticloudDbKey{partitionKey=item-1, sortKey=item-1}  {"id":"item-1","title":"hello (edited)", ...}
+[2026-06-12T19:40:58Z] cursor-0  DELETE MulticloudDbKey{partitionKey=item-1, sortKey=item-1}  {}
+
+^C
+--- Stopping watcher ---
+Total events observed: 3
+```
+
+#### Clean up DynamoDB resources (optional)
+
+A live table uses on-demand billing. Delete it (the stream is removed with it)
+when you're done:
+
+```bash
+aws dynamodb delete-table --table-name multiclouddb-sdk-for-java-changefeed__change-feed-demo --region us-east-1
+```
+
+### Tuning the watcher poll interval
+
+`ChangeFeedWatcherSample` polls each partition cursor on a fixed cadence. The
+default is **1000 ms**; override via the `changefeed.poll.intervalMs` system
+property (minimum 1 ms).
+
+Cosmos DB:
+
+```bash
+java "-Dchangefeed.poll.intervalMs=250" "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+DynamoDB:
+
+```bash
+java "-Dchangefeed.poll.intervalMs=250" "-Dmulticlouddb.config=change-feed-dynamo-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+```
+
+> Non-numeric values print a warning to stderr and fall back to the 1000 ms
+> default. Numeric values < 1 are clamped to 1 ms to avoid a busy-loop.
+> The watcher does not exit on bad input.
+
+---
+
+## Extended Retention Escape Hatch
+
+The portable change-feed baseline is **24 hours**: the SDK treats every cursor
+token older than that as expired, regardless of what the underlying provider
+stores server-side. Many real workloads want longer history — disaster
+recovery, late-arriving subscribers, weekend backfills.
+
+### How to enable extended retention
+
+Set `multiclouddb.changefeed.retentionDays` in your properties file:
+
+```properties
+# Any Duration > 24 hours works:
+multiclouddb.changefeed.retentionDays=7    # 7 days
+multiclouddb.changefeed.retentionDays=30   # 30 days
+```
+
+If **omitted** → `ChangeFeedConfig.defaults()` (24h baseline) — works on **all** providers.
+If **set** → SDK opts into extended retention via
+`ChangeFeedConfig.builder().extendedRetention(Duration.ofDays(N)).build()`.
+
+> **The SDK fails fast** if you set `retentionDays` on a provider that doesn't
+> support it. Leave the property **out** for unsupported providers (e.g. DynamoDB).
+
+### Cosmos DB account types
+
+Cosmos DB has two backup policies, each with different behavior:
+
+#### Option A: Continuous Backup account (Recommended)
+
+| Step | What to do |
+|------|-----------|
+| **Account setup** | Azure Portal → Cosmos account → **Backup & Restore** → Enable **Continuous Backup** (7-day or 30-day tier) |
+| **Properties file** | Do **NOT** set `retentionDays` — AVAD is automatic on CB accounts |
+| **How it works** | AVAD change feed is automatic on every container. Retention = your backup tier (7d or 30d). |
+| **Verify** | `az cosmosdb show --name <acct> -g <rg> --query backupPolicy.type -o tsv` → `Continuous` |
+| **Which samples** | Use `ChangeFeedSample` or `ChangeFeedWatcherSample` — they already get extended retention automatically. |
+
+```properties
+# change-feed-cosmos-cloud.properties for a CB account:
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
+multiclouddb.connection.key=<primary-master-key>
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+# Do NOT set retentionDays on a CB account — Cosmos rejects explicit retention policies.
+```
+
+#### Option B: Periodic Backup account (explicit opt-in)
+
+| Step | What to do |
+|------|-----------|
+| **Account setup** | No account-level change needed |
+| **Properties file** | Set `multiclouddb.changefeed.retentionDays=7` (or desired days) |
+| **How it works** | The SDK creates the container with an explicit AVAD `ChangeFeedPolicy`. Retention = value you specify. |
+| **Which samples** | Use `ChangeFeedExtendedRetentionSample` to enable and verify extended retention. |
+
+```properties
+# change-feed-cosmos-cloud.properties for a non-CB account:
+multiclouddb.provider=cosmos
+multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
+multiclouddb.connection.key=<primary-master-key>
+multiclouddb.connection.connectionMode=gateway
+multiclouddb.database=multiclouddb-sdk-for-java-changefeed
+multiclouddb.changefeed.retentionDays=7
+```
+
+> **⚠️ Do NOT set `retentionDays` on a Continuous Backup account!**
+> Cosmos rejects explicit retention policies when CB is enabled. The sample
+> detects this and prints a clear error message with fix instructions.
+
+### Per-provider behaviour
+
+| Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
+|----------|---------------------------------------------|--------------------------|
+| **Azure Cosmos DB** | Supported | Builds client with extended retention, provisions container, runs data-plane reads with cursor persistence. |
+| **Amazon DynamoDB** | Unsupported (Streams fixed at 24h) | The sample exits early — use `ChangeFeedSample` / `ChangeFeedWatcherSample` within the 24h baseline. |
+
+> **This sample performs a full data-plane round-trip** — it provisions a
+> container, writes test items, and consumes change events using
+> multi-threaded cursor readers.
+
+### Running `ChangeFeedExtendedRetentionSample`
+
+After building the fat jar (`mvn clean package -DskipTests`):
+
+> Requires a **live Cosmos account** (Periodic Backup) — the emulator does
+> not support extended retention and the sample will exit with an error if
+> it detects a localhost endpoint. CB accounts should use `ChangeFeedSample`
+> or `ChangeFeedWatcherSample` instead.
+
+Copy the template and fill in your endpoint + key, then edit it to set
+`retentionDays` (e.g. `multiclouddb.changefeed.retentionDays=7`):
+
+```bash
+cp src/main/resources/change-feed-cosmos-cloud.properties.template src/main/resources/change-feed-cosmos-cloud.properties
+```
+
+Build the fat jar:
+
+```bash
+mvn clean package -DskipTests
+```
+
+Run the sample:
+
+```bash
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
+```
+
+<a id="example-output-changefeedextendedretentionsample"></a>
+
+### Example output
+
+**Cosmos (success):**
+
+```
+=== Multicloud DB Change Feed — Extended Retention Sample ===
+Provider          : Azure Cosmos DB
+Requested window  : PT168H (baseline is 24h)
+
+--- Building client with extendedRetention(PT168H) ---
+  Client built successfully — capability gate passed.
+
+--- Capability detail ---
+  Name      : extended_change_feed_history
+  Supported : true
+  Notes     : Up to 30 days via Continuous Backup 30d tier; 7d minimum (AVAD requires Continuous Backup)
+
+Extended retention is honoured by the SDK on this provider. Cursor tokens
+issued under this client carry the opt-in stamp and can be resumed beyond
+24h, up to the requested window.
+
+Data-plane round-trip (listCursors / readChanges) requires provider-specific
+substrate setup and is out of scope for this sample — see ChangeFeedSample /
+ChangeFeedWatcherSample for the 24h-baseline data-plane demo.
+
+=== Sample complete ===
+```
+
+---
+
 ## Provisioning Model — Why Continuous Backup Matters
 
 Pull-mode change feed in AVAD mode needs different provisioning depending on the
@@ -125,8 +962,7 @@ endpoint:
 Verify a live account has CB enabled:
 
 ```bash
-az cosmosdb show --name <account> --resource-group <rg> \
-  --query backupPolicy.type -o tsv
+az cosmosdb show --name <account> --resource-group <rg> --query backupPolicy.type -o tsv
 # Expected output: Continuous
 ```
 
@@ -207,11 +1043,7 @@ The default limit on many accounts is 4,000 RU/s. In the Azure Portal:
 #### 2. Scale the container to 30,000 RU/s
 
 ```powershell
-az cosmosdb sql container throughput update `
-    --account-name <account> -g <rg> `
-    --database-name multiclouddb-sdk-for-java-changefeed `
-    --name change-feed-demo `
-    --throughput 30000
+az cosmosdb sql container throughput update --account-name <account> -g <rg> --database-name multiclouddb-sdk-for-java-changefeed --name change-feed-demo --throughput 30000
 ```
 
 #### 3. Wait for the partition split to complete
@@ -219,11 +1051,7 @@ az cosmosdb sql container throughput update `
 The split is asynchronous and typically takes 4–10 minutes. Monitor with:
 
 ```powershell
-az cosmosdb sql container throughput show `
-    --account-name <account> -g <rg> `
-    --database-name multiclouddb-sdk-for-java-changefeed `
-    --name change-feed-demo `
-    --query "resource.instantMaximumThroughput"
+az cosmosdb sql container throughput show --account-name <account> -g <rg> --database-name multiclouddb-sdk-for-java-changefeed --name change-feed-demo --query "resource.instantMaximumThroughput"
 ```
 
 - `"10000"` → 1 partition (split not started)
@@ -236,11 +1064,7 @@ Once the split is done, physical partitions **never merge back**, so you
 can scale down immediately and keep the 3 cursors:
 
 ```powershell
-az cosmosdb sql container throughput update `
-    --account-name <account> -g <rg> `
-    --database-name multiclouddb-sdk-for-java-changefeed `
-    --name change-feed-demo `
-    --throughput 400
+az cosmosdb sql container throughput update --account-name <account> -g <rg> --database-name multiclouddb-sdk-for-java-changefeed --name change-feed-demo --throughput 400
 ```
 
 > **Cost note:** 30,000 RU/s costs ~$1.75/hr. Scale down as soon as the
@@ -250,9 +1074,7 @@ az cosmosdb sql container throughput update `
 #### 5. Run the watcher and add items with different partition keys
 
 ```powershell
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
+java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
 ```
 
 Then in the **Azure Portal** → **Data Explorer** → `change-feed-demo` →
@@ -311,415 +1133,6 @@ same partition key always appear on the same cursor.
 
 ---
 
-## Emulator Setup
-
-All three samples work against emulators / local endpoints. The data-plane
-samples (`ChangeFeedSample`, `ChangeFeedWatcherSample`) require the
-provider-specific change-feed prerequisite to be met (see the Provider
-Support Matrix above). `ChangeFeedExtendedRetentionSample` exercises the
-build-time capability gate and works before any wire I/O — so it works
-even if the emulator isn't running.
-
-### Cosmos DB Emulator
-
-The Cosmos DB emulator provides a free local instance of Azure Cosmos DB for
-development and testing.
-
-#### 1. Install
-
-Download and install from:\
-<https://learn.microsoft.com/en-us/azure/cosmos-db/emulator#install-the-emulator>
-
-> **Windows:** Run the MSI installer. The emulator is added to Start Menu.\
-> **Docker** (Linux / macOS):
-> ```bash
-> docker pull mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
-> docker run -p 8081:8081 -p 10250-10255:10250-10255 \
->   mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
-> ```
-> **Docker** (Windows / PowerShell):
-> ```powershell
-> docker pull mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
-> docker run -p 8081:8081 -p 10250-10255:10250-10255 `
->   mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
-> ```
-
-#### 2. Start the emulator
-
-On Windows, launch **Azure Cosmos DB Emulator** from the Start Menu (or system
-tray). It starts on **<https://localhost:8081>** by default.
-
-Open the Data Explorer in your browser:\
-<https://localhost:8081/_explorer/index.html>
-
-#### 3. No manual database / container needed
-
-Unlike the Todo App sample, you do **not** need to pre-create the database or
-container in Data Explorer. The samples call `ensureDatabase()` /
-`ensureContainer()` (with an explicit AVAD `ChangeFeedPolicy` for the emulator)
-on startup, so a fresh emulator works out of the box.
-
-#### 4. Emulator connection details (already in `change-feed-cosmos.properties`)
-
-| Property | Value |
-|----------|-------|
-| Endpoint | `https://localhost:8081` |
-| Key      | `C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==` (well-known emulator key) |
-| Connection mode | `gateway` (required for emulator) |
-| Database | `multiclouddb-sdk-for-java-changefeed` |
-| Container | `change-feed-demo` |
-
-#### 5. SSL certificate trust
-
-The emulator uses a self-signed TLS certificate. If you see SSL errors, import
-the emulator certificate into your JDK truststore (see the
-[Todo App README](README-todo-app.md#5-ssl-certificate-trust) for a detailed
-walk-through that applies here too).
-
----
-
-## Running the Samples
-
-### Build the fat jar
-
-The samples are launched as plain `java -cp <jar> <MainClass>` invocations, so
-build the assembled jar once:
-
-```bash
-mvn package -DskipTests
-```
-
-This produces `target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar`,
-which contains the samples plus every runtime dependency.
-
-> **Why not `mvn exec:java`?** The `exec-maven-plugin` in `pom.xml` is pinned to
-> `mainClass=com.multiclouddb.samples.PortableCrudQuerySample` and overriding
-> it via `-Dexec.mainClass=...` does not always take effect on PowerShell. The
-> fat-jar path is uniformly reliable across shells.
-
-### Run against the Cosmos DB Emulator
-
-The default config (`change-feed-cosmos.properties`) targets the emulator and
-is loaded automatically when no `-Dmulticlouddb.config` is supplied.
-
-**One-shot demo:**
-
-```bash
-java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-```
-
-**Continuous watcher:**
-
-```bash
-java -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-Then open <https://localhost:8081/_explorer/index.html>, navigate to the
-`multiclouddb-sdk-for-java-changefeed → change-feed-demo` container, and
-add / edit / delete items — each operation prints a line in the watcher
-terminal.
-
-### Run against Cosmos DB (Azure Cloud)
-
-> **First time?** Complete the [Cloud Setup](#cloud-setup) below to create your
-> properties file and provision a CB-enabled Cosmos DB account.
-
-`ConfigLoader` reads configs from the fat-jar classpath, so the runtime file
-must live under `src/main/resources/` **before** you run `mvn package`. After
-the one-time properties-file copy you can re-use the resulting fat jar for both
-samples.
-
-**macOS / Linux:**
-
-```bash
-mvn package -DskipTests
-
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-mvn package -DskipTests
-
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-### Tuning the watcher poll interval
-
-`ChangeFeedWatcherSample` polls each partition cursor on a fixed cadence. The
-default is **1000 ms**; override via the `changefeed.poll.intervalMs` system
-property (minimum 1 ms):
-
-**macOS / Linux:**
-
-```bash
-java -Dchangefeed.poll.intervalMs=250 \
-     -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-java "-Dchangefeed.poll.intervalMs=250" `
-     "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-> Non-numeric values print a warning to stderr and fall back to the 1000 ms
-> default. Numeric values < 1 are clamped to 1 ms to avoid a busy-loop.
-> The watcher does not exit on bad input.
-
----
-
-## Example Output
-
-### `ChangeFeedSample` (one-shot)
-
-```
-=== Multicloud DB Change Feed Sample ===
-Provider: Azure Cosmos DB
-Mode    : LIVE
-
---- Provisioning 'multiclouddb-sdk-for-java-changefeed/change-feed-demo' ---
-
---- listCursors (live tip) ---
-  Discovered 1 partition cursor(s)
-  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
-
---- readChanges (consuming events) ---
-  [writer] upsert cf-1
-  [writer] upsert cf-2
-  [writer] upsert cf-3
-  [writer] upsert cf-4
-  [writer] upsert cf-5
-  [writer] upsert cf-6
-  [writer] update cf-1
-  [writer] delete cf-1
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-2, sortKey=cf-2} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-3, sortKey=cf-3} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-4, sortKey=cf-4} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-5, sortKey=cf-5} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  CREATE MulticloudDbKey{partitionKey=cf-6, sortKey=cf-6} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  UPDATE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-  [consumer] cursor-0  DELETE MulticloudDbKey{partitionKey=cf-1, sortKey=cf-1} @ 2026-06-12T19:40:55Z
-
-  Total events observed: 8
-
---- Cursor token round-trip ---
-  Persisted token (truncated): {"continuation":"\"...\"","partitionKey":...
-  Resumed cursor read 0 new events (expected — no further writes)
-
-=== Sample complete ===
-```
-
-### `ChangeFeedWatcherSample` (continuous)
-
-Start the watcher, then in another window / the Azure Portal Data Explorer
-create a document, edit it, and delete it. Events appear within
-`changefeed.poll.intervalMs` (default 1 second):
-
-```
-=== Multicloud DB Change Feed Watcher ===
-Provider     : Azure Cosmos DB
-Mode         : LIVE
-Container    : multiclouddb-sdk-for-java-changefeed/change-feed-demo
-Poll interval: 1000 ms
-
-Discovered 1 partition cursor(s) at the live tip.
-  cursor-0: eyJ0eXBlIjoiQ29zbW9zIiwiY29udGlu…
-
-Watching multiclouddb-sdk-for-java-changefeed/change-feed-demo — go add/update/delete items (e.g., in the Azure Portal Data Explorer).
-Press Ctrl+C to stop.
-
-[2026-06-12T19:40:55Z] cursor-0  CREATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello", ...}
-[2026-06-12T19:40:57Z] cursor-0  UPDATE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {"id":"portal-1","title":"hello (edited)", ...}
-[2026-06-12T19:40:58Z] cursor-0  DELETE MulticloudDbKey{partitionKey=portal-1, sortKey=portal-1}  {}
-
-^C
---- Stopping watcher ---
-Total events observed: 3
-```
-
----
-
-## Extended Retention Escape Hatch
-
-The portable change-feed baseline is **24 hours**: the SDK treats every cursor
-token older than that as expired, regardless of what the underlying provider
-stores server-side. Many real workloads want longer history — disaster
-recovery, late-arriving subscribers, weekend backfills.
-
-### How to enable extended retention
-
-Set `multiclouddb.changefeed.retentionDays` in your properties file:
-
-```properties
-# Any Duration > 24 hours works:
-multiclouddb.changefeed.retentionDays=7    # 7 days
-multiclouddb.changefeed.retentionDays=30   # 30 days
-```
-
-If **omitted** → `ChangeFeedConfig.defaults()` (24h baseline) — works on **all** providers.
-If **set** → SDK opts into extended retention via
-`ChangeFeedConfig.builder().extendedRetention(Duration.ofDays(N)).build()`.
-
-> **The SDK fails fast** if you set `retentionDays` on a provider that doesn't
-> support it. Leave the property **out** for unsupported providers (e.g. DynamoDB).
-
-### Cosmos DB account types
-
-Cosmos DB has two backup policies, each with different behavior:
-
-#### Option A: Continuous Backup account (Recommended)
-
-| Step | What to do |
-|------|-----------|
-| **Account setup** | Azure Portal → Cosmos account → **Backup & Restore** → Enable **Continuous Backup** (7-day or 30-day tier) |
-| **Properties file** | Do **NOT** set `retentionDays` — AVAD is automatic on CB accounts |
-| **How it works** | AVAD change feed is automatic on every container. Retention = your backup tier (7d or 30d). |
-| **Verify** | `az cosmosdb show --name <acct> -g <rg> --query backupPolicy.type -o tsv` → `Continuous` |
-| **Which samples** | Use `ChangeFeedSample` or `ChangeFeedWatcherSample` — they already get extended retention automatically. |
-
-```properties
-# change-feed-cosmos-cloud.properties for a CB account:
-multiclouddb.provider=cosmos
-multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
-multiclouddb.connection.key=<primary-master-key>
-multiclouddb.connection.connectionMode=gateway
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-# Do NOT set retentionDays on a CB account — Cosmos rejects explicit retention policies.
-```
-
-#### Option B: Periodic Backup account (explicit opt-in)
-
-| Step | What to do |
-|------|-----------|
-| **Account setup** | No account-level change needed |
-| **Properties file** | Set `multiclouddb.changefeed.retentionDays=7` (or desired days) |
-| **How it works** | The SDK creates the container with an explicit AVAD `ChangeFeedPolicy`. Retention = value you specify. |
-| **Which samples** | Use `ChangeFeedExtendedRetentionSample` to enable and verify extended retention. |
-
-```properties
-# change-feed-cosmos-cloud.properties for a non-CB account:
-multiclouddb.provider=cosmos
-multiclouddb.connection.endpoint=https://<account>.documents.azure.com:443/
-multiclouddb.connection.key=<primary-master-key>
-multiclouddb.connection.connectionMode=gateway
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.changefeed.retentionDays=7
-```
-
-> **⚠️ Do NOT set `retentionDays` on a Continuous Backup account!**
-> Cosmos rejects explicit retention policies when CB is enabled. The sample
-> detects this and prints a clear error message with fix instructions.
-
-### Per-provider behaviour
-
-| Provider | `Capability.EXTENDED_CHANGE_FEED_HISTORY` | What this sample prints |
-|----------|---------------------------------------------|--------------------------|
-| **Azure Cosmos DB** | Supported | Builds client with extended retention, provisions container, runs data-plane reads with cursor persistence. |
-
-> **This sample performs a full data-plane round-trip** — it provisions a
-> container, writes test items, and consumes change events using
-> multi-threaded cursor readers.
-
-### Running `ChangeFeedExtendedRetentionSample`
-
-After building the fat jar (`mvn clean package -DskipTests`):
-
-> Requires a **live Cosmos account** (Periodic Backup) — the emulator does
-> not support extended retention and the sample will exit with an error if
-> it detects a localhost endpoint. CB accounts should use `ChangeFeedSample`
-> or `ChangeFeedWatcherSample` instead.
-
-**macOS / Linux:**
-
-```bash
-# Copy template and fill in endpoint + key
-cp src/main/resources/change-feed-cosmos-cloud.properties.template \
-   src/main/resources/change-feed-cosmos-cloud.properties
-# Edit to add your endpoint, key, and set retentionDays:
-#   multiclouddb.changefeed.retentionDays=7
-
-mvn clean package -DskipTests
-
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# Copy template and fill in endpoint + key
-cp src\main\resources\change-feed-cosmos-cloud.properties.template `
-   src\main\resources\change-feed-cosmos-cloud.properties
-# Edit to add your endpoint, key, and set retentionDays:
-#   multiclouddb.changefeed.retentionDays=7
-
-mvn clean package -DskipTests
-
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedExtendedRetentionSample
-```
-```
-
-<a id="example-output-changefeedextendedretentionsample"></a>
-
-### Example output
-
-**Cosmos (success):**
-
-```
-=== Multicloud DB Change Feed — Extended Retention Sample ===
-Provider          : Azure Cosmos DB
-Requested window  : PT168H (baseline is 24h)
-
---- Building client with extendedRetention(PT168H) ---
-  Client built successfully — capability gate passed.
-
---- Capability detail ---
-  Name      : extended_change_feed_history
-  Supported : true
-  Notes     : Up to 30 days via Continuous Backup 30d tier; 7d minimum (AVAD requires Continuous Backup)
-
-Extended retention is honoured by the SDK on this provider. Cursor tokens
-issued under this client carry the opt-in stamp and can be resumed beyond
-24h, up to the requested window.
-
-Data-plane round-trip (listCursors / readChanges) requires provider-specific
-substrate setup and is out of scope for this sample — see ChangeFeedSample /
-ChangeFeedWatcherSample for the 24h-baseline data-plane demo.
-
-=== Sample complete ===
-```
-
----
-
 ## Configuration Reference
 
 Both data-plane samples (`ChangeFeedSample`, `ChangeFeedWatcherSample`) read
@@ -731,7 +1144,7 @@ the same set of keys from the properties file pointed to by
 | `multiclouddb.provider` | yes | — | `cosmos` |
 | `multiclouddb.connection.endpoint` | yes | — | `https://localhost:8081` (emulator) or `https://<account>.documents.azure.com:443/` (cloud) |
 | `multiclouddb.connection.key` | yes | — | Cosmos primary master key. |
-| `multiclouddb.connection.connectionMode` | no | `direct` | Set to `gateway` for the emulator; `direct` works for live accounts. |
+| `multiclouddb.connection.connectionMode` | no | `gateway` | `gateway` is required for the emulator and works for live accounts; `direct` is also valid for live accounts. |
 | `multiclouddb.database` | no | `multiclouddb-sdk-for-java-changefeed` | Logical database name. |
 | `multiclouddb.collection` | no | `change-feed-demo` | Container name. |
 
@@ -752,186 +1165,31 @@ Shipped properties files:
 
 ---
 
-## Cloud Setup
-
-### Cosmos DB Cloud Setup
-
-> Run these steps **in order** in the same terminal. Variables set in one step
-> carry forward to the next — do not close the terminal between steps.
-
-#### Step 1 — Create a Continuous-Backup Cosmos account
-
-The change-feed samples require Continuous Backup to be enabled on the target
-Cosmos account so the AVAD change feed is available without additional
-per-container configuration.
-
-**macOS / Linux:**
-
-```bash
-# Pick names
-COSMOS_ACCOUNT=<your-account-name>
-COSMOS_RG=<your-resource-group>
-COSMOS_LOCATION=eastus
-
-# Create a CB-enabled account (tier doesn't matter; standard suffices)
-az cosmosdb create \
-  --name "$COSMOS_ACCOUNT" \
-  --resource-group "$COSMOS_RG" \
-  --locations regionName="$COSMOS_LOCATION" \
-  --backup-policy-type Continuous \
-  --backup-tier Continuous7Days
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$COSMOS_ACCOUNT = '<your-account-name>'
-$COSMOS_RG      = '<your-resource-group>'
-$COSMOS_LOCATION = 'eastus'
-
-az cosmosdb create `
-  --name $COSMOS_ACCOUNT `
-  --resource-group $COSMOS_RG `
-  --locations "regionName=$COSMOS_LOCATION" `
-  --backup-policy-type Continuous `
-  --backup-tier Continuous7Days
-```
-
-Verify CB is enabled:
-
-```bash
-az cosmosdb show --name "$COSMOS_ACCOUNT" -g "$COSMOS_RG" \
-  --query backupPolicy.type -o tsv
-# Expected output: Continuous
-```
-
-> **Already have a Cosmos account on Periodic backup?** You can switch an
-> existing account to Continuous Backup with
-> `az cosmosdb update --backup-policy-type Continuous`. Note that the switch
-> is **one-way** — you cannot revert to Periodic.
-
-> **Don't need to create the database / container ahead of time** — the
-> samples call `ensureDatabase()` / `ensureContainer()` on startup. On a
-> CB-enabled account a plain container is enough; AVAD is automatic.
-
-#### Step 2 — Create the properties file
-
-The cloud properties file is **git-ignored** and must never be committed.
-
-**macOS / Linux:**
-
-```bash
-COSMOS_ENDPOINT=$(az cosmosdb show \
-  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
-  --query documentEndpoint -o tsv)
-
-COSMOS_KEY=$(az cosmosdb keys list \
-  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
-  --query primaryMasterKey -o tsv)
-
-cat > src/main/resources/change-feed-cosmos-cloud.properties << EOF
-multiclouddb.provider=cosmos
-multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
-multiclouddb.connection.key=$COSMOS_KEY
-multiclouddb.connection.connectionMode=gateway
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-EOF
-```
-
-**Windows (PowerShell):**
-
-```powershell
-$COSMOS_ENDPOINT = (az cosmosdb show `
-  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
-  --query documentEndpoint -o tsv)
-
-$COSMOS_KEY = (az cosmosdb keys list `
-  --name $COSMOS_ACCOUNT --resource-group $COSMOS_RG `
-  --query primaryMasterKey -o tsv)
-
-@"
-multiclouddb.provider=cosmos
-multiclouddb.connection.endpoint=$COSMOS_ENDPOINT
-multiclouddb.connection.key=$COSMOS_KEY
-multiclouddb.connection.connectionMode=gateway
-multiclouddb.database=multiclouddb-sdk-for-java-changefeed
-multiclouddb.collection=change-feed-demo
-"@ | Set-Content src\main\resources\change-feed-cosmos-cloud.properties
-```
-
-Verify:
-
-```bash
-cat src/main/resources/change-feed-cosmos-cloud.properties
-```
-
-> **Don't have the Azure CLI?** Get endpoint and key from the
-> [Azure Portal](https://portal.azure.com) → your Cosmos DB account → **Keys**,
-> then create the file manually by copying
-> `src/main/resources/change-feed-cosmos-cloud.properties.template` and filling
-> in the placeholders.
-
-#### Step 3 — Build and run
-
-`ConfigLoader` reads configs from the **fat-jar classpath**, so the runtime
-file must live under `src/main/resources/` **before** you run `mvn package`.
-
-**macOS / Linux:**
-
-```bash
-mvn package -DskipTests
-
-# One-shot demo
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java -Dmulticlouddb.config=change-feed-cosmos-cloud.properties \
-     -cp target/multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar \
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-**Windows (PowerShell):**
-
-```powershell
-mvn package -DskipTests
-
-# One-shot demo
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedSample
-
-# Continuous watcher
-java "-Dmulticlouddb.config=change-feed-cosmos-cloud.properties" `
-     -cp target\multiclouddb-samples-1.0.0-SNAPSHOT-jar-with-dependencies.jar `
-     com.multiclouddb.samples.changefeed.ChangeFeedWatcherSample
-```
-
-#### Step 4 — Clean up Cosmos DB resources (optional)
-
-Drop the database (and its single container) when you're done:
-
-```bash
-az cosmosdb sql database delete \
-  --account-name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" \
-  --name multiclouddb-sdk-for-java-changefeed --yes
-```
-
-Or delete the entire Cosmos account:
-
-```bash
-az cosmosdb delete \
-  --name "$COSMOS_ACCOUNT" --resource-group "$COSMOS_RG" --yes
-```
-
----
-
 ## Troubleshooting
 
-### `BadRequest: The retention duration in the Change Feed policy should not be set when continuous backup mode is enabled`
+### `All Versions and Deletes mode is not supported for the chosen change feed start from option`
 
+Full message: *"All Versions and Deletes mode is not supported for the chosen
+change feed start from option. Use
+`CosmosChangeFeedRequestOptions.createForProcessingFromNow` or
+`createFromContinuation` instead."* — usually accompanied by
+`Total events observed: 0`.
+
+This means the `azure-cosmos` Java SDK on your classpath is **older than
+4.81.0**, the minimum required for the AVAD change-feed pull model. With an
+older SDK the AVAD "warm-up" read can't obtain a continuation token and the
+reader falls back to a point-in-time start, which AVAD mode rejects (AVAD only
+supports starting *from now* or *from a checkpoint*, never from a specific
+point in time or the beginning of the container — see
+[Change feed modes](https://learn.microsoft.com/azure/cosmos-db/change-feed-modes)).
+
+Fix: ensure `azure-cosmos.version` in `pom.xml` is **≥ 4.81.0** and rebuild:
+
+```bash
+mvn -q -DskipTests clean package
+```
+
+### `BadRequest: The retention duration in the Change Feed policy should not be set when continuous backup mode is enabled`
 You hit the CB+AVAD interaction described in
 [Provisioning Model](#provisioning-model--why-continuous-backup-matters). The
 samples already avoid this on live accounts; if you see it, you likely modified
@@ -952,8 +1210,21 @@ The Cosmos emulator caps AVAD retention at **10 minutes**. The sample already
 uses `Duration.ofMinutes(10)` for the emulator path; if you forked the code,
 keep that ceiling.
 
-### Watcher prints `Discovered 0 partition cursor(s)`
+### `UNSUPPORTED_CAPABILITY(stream_not_enabled)` on DynamoDB
 
+The table exists but has no DynamoDB Stream. The samples enable a
+`NEW_AND_OLD_IMAGES` stream automatically after `ensureContainer`; if you see
+this, you likely pre-created the table without a stream, or pointed the sample
+at a table that wasn't provisioned by it. Enable a stream on the table:
+
+```bash
+aws dynamodb update-table --table-name local__change-feed-demo --endpoint-url http://localhost:8000 --region us-east-1 --stream-specification StreamEnabled=true,StreamViewType=NEW_AND_OLD_IMAGES
+```
+
+…or let the sample create the table for you. Note that only changes committed
+*after* the stream is enabled are surfaced.
+
+### Watcher prints `Discovered 0 partition cursor(s)`
 The container doesn't exist yet, or you ran the watcher against a different
 container than the one you're writing to. Confirm `multiclouddb.database` /
 `multiclouddb.collection` in your config match what you're editing in Data
@@ -974,7 +1245,6 @@ the [Todo App README's SSL section](README-todo-app.md#5-ssl-certificate-trust)
 for the full walk-through.
 
 ### `Could not find artifact com.microsoft.multiclouddb:multiclouddb-api:jar:<version>`
-
 You likely have a stale `.mvn/maven.config` left over from local SDK testing.
 Either delete `.mvn/maven.config` (defaults will resolve `0.1.0-beta.2` from
 Maven Central) or update the override to a version actually installed in your

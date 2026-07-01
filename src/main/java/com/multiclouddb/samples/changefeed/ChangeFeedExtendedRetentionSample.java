@@ -126,10 +126,14 @@ public class ChangeFeedExtendedRetentionSample {
         System.out.println("Provider: " + provider.displayName());
         System.out.println();
 
-        // *** TEMPORARY: Only Cosmos DB is supported for change feed ***
+        // *** Extended retention is Cosmos-only. DynamoDB Streams are fixed at
+        //     24h server-side (EXTENDED_CHANGE_FEED_HISTORY_UNSUPPORTED), so the
+        //     base change-feed samples (ChangeFeedSample / ChangeFeedWatcherSample)
+        //     support DynamoDB but this extended-retention sample does not. ***
         if (!ProviderId.COSMOS.equals(provider)) {
-            System.err.println("ERROR: Change-feed samples currently support Cosmos DB only.");
-            System.err.println("Other providers are not yet supported. Set multiclouddb.provider=cosmos.");
+            System.err.println("ERROR: Extended change-feed retention is supported on Cosmos DB only.");
+            System.err.println("DynamoDB Streams are fixed at 24h; Spanner has no change feed yet.");
+            System.err.println("For DynamoDB/Cosmos within the 24h baseline, use ChangeFeedSample or ChangeFeedWatcherSample.");
             System.exit(1);
             return;
         }
