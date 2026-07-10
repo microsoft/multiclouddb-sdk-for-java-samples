@@ -7,14 +7,13 @@ import com.multiclouddb.api.Capability;
 import com.multiclouddb.api.CapabilitySet;
 import com.multiclouddb.api.DocumentResult;
 import com.multiclouddb.api.MulticloudDbClient;
-import com.multiclouddb.api.MulticloudDbClientConfig;
 import com.multiclouddb.api.MulticloudDbClientFactory;
 import com.multiclouddb.api.MulticloudDbException;
 import com.multiclouddb.api.MulticloudDbKey;
-import com.multiclouddb.api.ProviderId;
 import com.multiclouddb.api.QueryPage;
 import com.multiclouddb.api.QueryRequest;
 import com.multiclouddb.api.ResourceAddress;
+import com.multiclouddb.samples.ConfigLoader;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +30,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Sample TODO web application demonstrating the Multicloud DB SDK.
@@ -328,13 +326,29 @@ public class TodoApp {
     // ── Main ────────────────────────────────────────────────────────────────
 
     public static void main(String[] args) throws Exception {
-        Properties props = loadProperties();
-        MulticloudDbClientConfig config = buildConfig(props);
+        // Backwards-compat: if -Dtodo.config is set but -Dmulticlouddb.config is not,
+        // forward it so ConfigLoader picks up the legacy system property.
+        String legacy = System.getProperty("todo.config");
+        if (legacy != null && System.getProperty("multiclouddb.config") == null) {
+            System.setProperty("multiclouddb.config", legacy);
+        }
+
+        ConfigLoader.AppConfig appConfig =
+                ConfigLoader.load("todo-app-cosmos.properties");
 
         int port = Integer.parseInt(
                 System.getProperty("todo.port", String.valueOf(DEFAULT_PORT)));
 
-        MulticloudDbClient client = MulticloudDbClientFactory.create(config);
+        MulticloudDbClient client = MulticloudDbClientFactory.create(appConfig.sdk());
+
+        // Close the SDK client (and its underlying provider connections) on shutdown.
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                client.close();
+            } catch (Exception e) {
+                System.err.println("  Error closing client: " + e.getMessage());
+            }
+        }, "multiclouddb-todo-shutdown"));
 
         System.out.println("  Provisioning resources...");
         client.provisionSchema(Map.of(DATABASE, List.of(COLLECTION)));
@@ -344,53 +358,5 @@ public class TodoApp {
 
         // Block main thread so the server stays alive
         Thread.currentThread().join();
-    }
-
-    private static Properties loadProperties() throws IOException {
-        Properties props = new Properties();
-        String propsFile = System.getProperty("todo.config",
-                "todo-app-cosmos.properties");
-
-        try (InputStream is = TodoApp.class.getClassLoader()
-                .getResourceAsStream(propsFile)) {
-            if (is != null) {
-                props.load(is);
-                System.out.println("  Loaded config: " + propsFile);
-            } else {
-                System.out.println("  Config file not found: " + propsFile
-                        + " — using system properties");
-            }
-        }
-
-        for (String key : System.getProperties().stringPropertyNames()) {
-            if (key.startsWith("multiclouddb.")) {
-                props.setProperty(key, System.getProperty(key));
-            }
-        }
-
-        return props;
-    }
-
-    private static MulticloudDbClientConfig buildConfig(Properties props) {
-        String providerName = props.getProperty("multiclouddb.provider", "cosmos");
-        ProviderId provider = ProviderId.fromId(providerName);
-
-        MulticloudDbClientConfig.Builder builder = MulticloudDbClientConfig.builder()
-                .provider(provider);
-
-        for (String key : props.stringPropertyNames()) {
-            if (key.startsWith("multiclouddb.connection.")) {
-                builder.connection(
-                        key.substring("multiclouddb.connection.".length()),
-                        props.getProperty(key));
-            }
-            if (key.startsWith("multiclouddb.auth.")) {
-                builder.auth(
-                        key.substring("multiclouddb.auth.".length()),
-                        props.getProperty(key));
-            }
-        }
-
-        return builder.build();
     }
 }

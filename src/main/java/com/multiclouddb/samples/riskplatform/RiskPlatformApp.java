@@ -161,6 +161,7 @@ public class RiskPlatformApp {
             if ("OPTIONS".equals(method)) {
                 addCorsHeaders(exchange);
                 exchange.sendResponseHeaders(204, -1);
+                exchange.close();
                 return;
             }
 
@@ -244,6 +245,7 @@ public class RiskPlatformApp {
             if ("OPTIONS".equals(method)) {
                 addCorsHeaders(exchange);
                 exchange.sendResponseHeaders(204, -1);
+                exchange.close();
                 return;
             }
 
@@ -363,6 +365,7 @@ public class RiskPlatformApp {
             if ("OPTIONS".equals(method)) {
                 addCorsHeaders(exchange);
                 exchange.sendResponseHeaders(204, -1);
+                exchange.close();
                 return;
             }
 
@@ -648,13 +651,13 @@ public class RiskPlatformApp {
     }
 
     private String getQueryParam(HttpExchange exchange, String name) {
-        String query = exchange.getRequestURI().getQuery();
+        String query = exchange.getRequestURI().getRawQuery();
         if (query == null)
             return null;
         for (String param : query.split("&")) {
             String[] kv = param.split("=", 2);
-            if (kv.length == 2 && name.equals(kv[0])) {
-                return kv[1];
+            if (kv.length == 2 && name.equals(java.net.URLDecoder.decode(kv[0], StandardCharsets.UTF_8))) {
+                return java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
             }
         }
         return null;
@@ -678,6 +681,15 @@ public class RiskPlatformApp {
                 System.getProperty("risk.port", String.valueOf(DEFAULT_PORT)));
 
         MulticloudDbClient client = MulticloudDbClientFactory.create(config);
+
+        // Close the SDK client (and underlying provider connections) on Ctrl+C / shutdown.
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                client.close();
+            } catch (Exception e) {
+                System.err.println("  Error closing client: " + e.getMessage());
+            }
+        }, "multiclouddb-risk-shutdown"));
 
         // Provision databases/containers/tables (provider-specific)
         ResourceProvisioner provisioner = new ResourceProvisioner(client);

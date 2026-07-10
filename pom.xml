@@ -19,7 +19,7 @@
         locally-built SDK instead, copy .mvn/maven.config.example to .mvn/maven.config
         and set the version overrides there (the file is git-ignored).
     </description>
-    <url>https://github.com/allenkim0129/multiclouddb-samples</url>
+    <url>https://github.com/microsoft/multiclouddb-sdk-for-java-samples</url>
 
     <licenses>
         <license>

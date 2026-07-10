@@ -96,13 +96,24 @@ public class PortableCrudQuerySample {
             // === 4. QUERY: Portable expression queries ===
             System.out.println("--- QUERY: Portable expressions ---");
 
-            // 4a. Full scan with paging
-            System.out.println("  [Full scan, pageSize=2]");
-            QueryRequest fullScan = QueryRequest.builder()
-                    .maxPageSize(2)
-                    .build();
-            QueryPage page = client.query(address, fullScan);
-            System.out.println("    Page 1: " + page.items().size() + " items, hasMore=" + (page.continuationToken() != null));
+            // 4a. Full scan with paging — follow continuation tokens to read all pages
+            System.out.println("  [Full scan, pageSize=2 — paginate via continuation token]");
+            String continuationToken = null;
+            int pageNum = 0;
+            int totalItems = 0;
+            do {
+                QueryRequest fullScan = QueryRequest.builder()
+                        .maxPageSize(2)
+                        .continuationToken(continuationToken)
+                        .build();
+                QueryPage page = client.query(address, fullScan);
+                pageNum++;
+                totalItems += page.items().size();
+                continuationToken = page.continuationToken();
+                System.out.println("    Page " + pageNum + ": " + page.items().size()
+                        + " items, hasMore=" + (continuationToken != null));
+            } while (continuationToken != null);
+            System.out.println("    Total items across all pages: " + totalItems);
 
             // 4b. Portable filter: status = @status
             System.out.println("  [Filter: status = @status]");
