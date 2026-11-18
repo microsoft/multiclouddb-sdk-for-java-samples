@@ -1,0 +1,6 @@
+multiclouddb.provider=spanner
+multiclouddb.database=<YOUR-SPANNER-DATABASE-ID>
+multiclouddb.collection=orders
+multiclouddb.connection.projectId=<YOUR-GCP-PROJECT-ID>
+multiclouddb.connection.instanceId=<YOUR-SPANNER-INSTANCE-ID>
+multiclouddb.connection.databaseId=<YOUR-SPANNER-DATABASE-ID>

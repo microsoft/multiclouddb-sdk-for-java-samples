@@ -1,0 +1,5 @@
+multiclouddb.provider=dynamo
+multiclouddb.database=production
+multiclouddb.collection=orders
+multiclouddb.connection.region=<YOUR-AWS-REGION>
+# Uses the default AWS credential provider chain. Do not store credentials here.

@@ -1,0 +1,9 @@
+multiclouddb.provider=cosmos
+multiclouddb.database=multiclouddb-orders
+multiclouddb.collection=orders
+multiclouddb.connection.endpoint=https://<YOUR-COSMOS-ACCOUNT-NAME>.documents.azure.com:443/
+# Set one auth option in the copied, git-ignored orders-cosmos-cloud.properties:
+# multiclouddb.connection.key=<YOUR-PRIMARY-KEY>
+# Otherwise the provider uses DefaultAzureCredential for Entra ID.
+# Optionally set this tenant hint:
+# multiclouddb.connection.tenantId=<YOUR-TENANT-ID>
