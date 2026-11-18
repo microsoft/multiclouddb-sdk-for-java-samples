@@ -10,6 +10,7 @@ Each sample runs against **Azure Cosmos DB**, **Amazon DynamoDB**, or **Google C
 | **Change Feed Watcher** | Long-running consumer that prints events as you add/edit/delete items in the portal | — | [below](#change-feed-samples) |
 | **Risk Analysis Platform** | Multi-tenant portfolio risk analytics with executive dashboard | `8090` | [README-risk-platform.md](README-risk-platform.md) |
 | **TODO App** | Simple CRUD web app with browser UI | `8080` | [README-todo-app.md](README-todo-app.md) |
+| **Order Service** | Provider-portable order API with app-owned Map mapping, partition-aware paging, and typed errors | — | [order-service/README.md](order-service/README.md) |
 
 ---
 

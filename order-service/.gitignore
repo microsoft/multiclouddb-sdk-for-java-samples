@@ -1,0 +1,3 @@
+target/
+*-cloud.properties
+!*-cloud.properties.template
